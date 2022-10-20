@@ -36,8 +36,8 @@ import json
 from operator import add, getitem
 from functools import reduce
 from typing import Dict, AnyStr, Callable, List
-
-
+import pandas as pd
+import plotly.express as px
 #Color pallette 
 class bcolors:
     HEADER = '\033[95m'
@@ -403,8 +403,27 @@ class MWDataMgr:
                         continue
                     else:
                         data["data"][topic].append([time, msg, src])
-        return data
 
+        return data
+    def processFuelTimeLog(self,data):
+        temp=pd.DataFrame(columns=['time','level'])
+        for pair in data['data']['FUEL_LEVEL_LOG']:
+            for key,value in pair[1].items():
+                temp.loc[len(temp.index)] = [value,key]
+        temp['time'] = temp['time'].astype(float)
+        temp['level'] = temp['level'].astype(float)
+        return temp
+    def processLatencyLogData(self,data):
+        temp = pd.DataFrame.from_dict(data['data']['LATENCY_LOG'][0][1], orient='index')
+        temp.reset_index(inplace=True)
+        temp = temp.rename(columns={'index': 'latency'})
+        temp = temp.rename(columns={0: 'counts'})
+        temp['latency'] = temp['latency'].astype(int)
+        temp['counts'] = temp['counts'].astype(int)
+        temp.sort_values(by=['latency'])
+        totalCounts = temp['counts'].sum()
+        temp['percent'] = (temp['counts'] / totalCounts) * 100
+        return temp
     def get_moosconf(self, moosf=None):
         # TODO: WRITE FUNCTION
         """ Provided a path to a logged MOOS configuration file we return nested dictionaries of the recorded data. Format: 
