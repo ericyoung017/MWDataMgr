@@ -437,10 +437,12 @@ class MWDataMgr:
 
         return data
     def processDepotEvents(self,data):
-        temp = pd.DataFrame(columns=['status', 'st', "et"])
+        temp = pd.DataFrame(columns=["dname",'status', 'st', "et"])
         for pair in data['data']['DEPOT_EVENT']:
             for key, values in pair[1].items():
-                temp.loc[len(temp.index)] = [key, values[0], values[1]]
+                dname=key.split(">")[0]
+                status = key.split(">")[1]
+                temp.loc[len(temp.index)] = [dname,status, values[0], values[1]]
         temp['st'] = temp['st'].astype(float)
         temp['et'] = temp['et'].astype(float)
         return temp
@@ -453,10 +455,13 @@ class MWDataMgr:
         return temp
 
     def processFuelTimeLog(self, data):
-        temp = pd.DataFrame(columns=['time', 'level'])
+        temp = pd.DataFrame(columns=['vname','time', 'level'])
+        vehicleName=""
+        for key, value in data['data']['FUEL_WAIT_TIME'][0][1].items():
+            vehicleName=key
         for pair in data['data']['FUEL_LEVEL_LOG']:
             for key, value in pair[1].items():
-                temp.loc[len(temp.index)] = [value, key]
+                temp.loc[len(temp.index)] = [vehicleName,value, key]
         temp['time'] = temp['time'].astype(float)
         temp['level'] = temp['level'].astype(float)
         return temp
@@ -1044,6 +1049,7 @@ if __name__ == "__main__":
     parser.add_argument("--depot",help="Processes and serializes a dataframe with depot information",action="store_true")
     parser.add_argument("--vehicle",help="Processes and serializes a dataframe with vehicle information",action="store_true")
     parser.add_argument("--shore",help="Processes and serializes a dataframe with shoreside information",action="store_true")
+    parser.add_argument("--script",help="eliminates prompting for use in another bash script",action="store_true")
     args = parser.parse_args()
 
     # CHECK AND PARSE ARGUMENTS
@@ -1181,14 +1187,15 @@ if __name__ == "__main__":
             # try to make the full path
             os.makedirs(output_directory)
         except FileExistsError:
-            print("Directory already exists, overwriting existing files")
-            ans = input("Do you with to continue with overwriting any existing files in this directory? (y/n)")
-            if ans[0].lower() == 'n':
-                print(
-                    "\t> Resolution: {bcolors.OKBLUE}Shutting down and not processing conversion request{bcolors.OKBLUE}.")
-                exit(0)
-            else:
-                print(f"\t> Resolution: {bcolors.OKBLUE}Overwriting data in < {output_directory} >{bcolors.OKBLUE}")
+            if not args.script:
+                print("Directory already exists, overwriting existing files")
+                ans = input("Do you with to continue with overwriting any existing files in this directory? (y/n)")
+                if ans[0].lower() == 'n':
+                    print(
+                        "\t> Resolution: {bcolors.OKBLUE}Shutting down and not processing conversion request{bcolors.OKBLUE}.")
+                    exit(0)
+                else:
+                    print(f"\t> Resolution: {bcolors.OKBLUE}Overwriting data in < {output_directory} >{bcolors.OKBLUE}")
         if '.alog' == source[-5:]:
             if args.vehicle:
                 output_path=output_directory + data["info"]["alias"]
