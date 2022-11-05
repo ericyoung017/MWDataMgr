@@ -1198,9 +1198,11 @@ if __name__ == "__main__":
                     print(f"\t> Resolution: {bcolors.OKBLUE}Overwriting data in < {output_directory} >{bcolors.OKBLUE}")
         if '.alog' == source[-5:]:
             if args.vehicle:
-                output_path=output_directory + data["info"]["alias"]
+                output_path=output_directory + data["info"]["alias"]+"_fuelTime"
                 with open(output_path, 'wb') as pickle_file:
                     pickle.dump(fuelTimeLog,pickle_file)
+                output_path = output_directory + data["info"]["alias"]+"_wait"
+                with open(output_path, 'wb') as pickle_file:
                     pickle.dump(fuelWaitTimeLog,pickle_file)
             elif args.depot:
                 output_path = output_directory + data["info"]["alias"]

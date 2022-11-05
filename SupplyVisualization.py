@@ -117,41 +117,41 @@ def read_list(name,name2):
     #fig.show()
     return fig
 
-def generateFuelTimeHistogram():
-    directory="/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/testLogFolder"
-    logLines = []
-    for filename in os.listdir(directory):
-        name = os.path.join(directory, filename)
-
-        # checking if it is a file
-        if not filename.startswith('.') and os.path.isfile(name):
-            #chomp the first header lines of the log file
-            f = open(name)
-            line = f.readline()
-            line = f.readline()
-            line = f.readline()
-            line = f.readline()
-            line = f.readline()
-            while line:
-                try:
-                    line=f.readline()
-                    #print(line)
-                    logLines.append(line)
-                except ValueError:
-                    print('Error in line :' + line)
-    rawLogData = pd.DataFrame([sub.split() for sub in logLines])
-    #print(rawLogData[3])
-    splitWaitLogs=rawLogData[3].str.split(pat='-',expand =True)
-    finalWaitTimes=splitWaitLogs[pd.to_numeric(splitWaitLogs[1], errors='coerce').notnull()]
-    finalWaitTimes.columns=['vehicle','time']
-    finalWaitTimes['time']=finalWaitTimes['time'].astype(float)
-    finalWaitTimes.sort_values(by=['time'],ascending=True)
-    fig = px.histogram(finalWaitTimes, x="time")
-    return fig
-    #fig.show()
-    #print(splitWaitLogs[1])
-    #print(finalWaitTimes)
-    #df2 = rawLogData[pd.to_numeric(rawLogData[3], errors='coerce').notnull()]
+# def generateFuelTimeHistogram():
+#     directory="/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/testLogFolder"
+#     logLines = []
+#     for filename in os.listdir(directory):
+#         name = os.path.join(directory, filename)
+#
+#         # checking if it is a file
+#         if not filename.startswith('.') and os.path.isfile(name):
+#             #chomp the first header lines of the log file
+#             f = open(name)
+#             line = f.readline()
+#             line = f.readline()
+#             line = f.readline()
+#             line = f.readline()
+#             line = f.readline()
+#             while line:
+#                 try:
+#                     line=f.readline()
+#                     #print(line)
+#                     logLines.append(line)
+#                 except ValueError:
+#                     print('Error in line :' + line)
+#     rawLogData = pd.DataFrame([sub.split() for sub in logLines])
+#     #print(rawLogData[3])
+#     splitWaitLogs=rawLogData[3].str.split(pat='-',expand =True)
+#     finalWaitTimes=splitWaitLogs[pd.to_numeric(splitWaitLogs[1], errors='coerce').notnull()]
+#     finalWaitTimes.columns=['vehicle','time']
+#     finalWaitTimes['time']=finalWaitTimes['time'].astype(float)
+#     finalWaitTimes.sort_values(by=['time'],ascending=True)
+#     fig = px.histogram(finalWaitTimes, x="time")
+#     return fig
+#     #fig.show()
+#     #print(splitWaitLogs[1])
+#     #print(finalWaitTimes)
+#     #df2 = rawLogData[pd.to_numeric(rawLogData[3], errors='coerce').notnull()]
 
 def generateFuelLineGraph():
     directory="/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/testLogFolder2"
@@ -213,8 +213,135 @@ def generateFuelLineGraph():
     #print((dashSegmentedFuelData[0]['level']<=200))
 
     #print(dashSegmentedFuelData[0][(dashSegmentedFuelData[0]['level']<=200)])
-def generateDepotTimelines(self,data):
-        print("foo")
+def generateDepotTimelines(directory) -> object:
+    depotData = pd.DataFrame(columns=["dname", 'status', 'st', "et"])
+
+    # iterate over files in
+    # that directory
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "DEPOT" in filename:
+                # read the depot pickle file and concat it to the depot data frame
+                depotData = pd.concat([depotData, pd.read_pickle(f)])
+    # set variable min time equal to the earliest start time in the depot data
+    minTime = depotData['st'].min()
+    # find the minimum in the start time column and subtract it from all values
+    depotData['st'] = depotData['st'] - depotData['st'].min()
+    # subtract mintTime from the end time column
+    depotData['et'] = depotData['et'] - minTime
+    # convert the start and end time columns to datetime objects
+    depotData['st'] = pd.to_datetime(depotData['st'], unit='s')
+    depotData['et'] = pd.to_datetime(depotData['et'], unit='s')
+    fig = px.timeline(depotData, x_start="st", x_end="et", y="dname", color='status')
+    return fig
+#create a function that will generate a line graph of the fuel levels of all vehicles
+def generateFuelLineGraph(directory):
+    vehicleFrames=[]
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "DEPOT" not in filename and "SHORESIDE" not in filename and "fuelTime" in filename:
+                #read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+                vehicleFrame=pd.read_pickle(f)
+                #subtract the earliest time from the time column
+                vehicleFrame['time'] = vehicleFrame['time'] - vehicleFrame['time'].min()
+                #convert the time column to a datetime object
+                vehicleFrame['time'] = pd.to_datetime(vehicleFrame['time'], unit='s')
+                vehicleFrames.append(vehicleFrame)
+        #create a scatter plot of the fuel levels of all vehicles
+    fig=go.Figure()
+    for frame in vehicleFrames:
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['level'],mode='lines', name=frame['vname'][0]    ))
+    return fig
+def generateFuelTimeHistogram(directory):
+    vehicleFrames=[]
+    for filename in os.listdir(directory):
+        f=os.path.join(directory,filename)
+        #checking if it is a file
+        if os.path.isfile(f) and "wait" in filename:
+            #read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+            vehicleFrame=pd.read_pickle(f)
+            vehicleFrames.append(vehicleFrame)
+    #concatenate all the dataframes into one dataframe called allVehicleData
+    allVehicleData=pd.concat(vehicleFrames)
+    fig = px.histogram(allVehicleData, x="time")
+    #fig.show()
+    return fig
+def generateDashboard(depotDirectory,vehicleDirectory):
+    fig1=generateDepotTimelines(depotDirectory)
+    fig2=generateFuelLineGraph(vehicleDirectory)
+    fig3=generateFuelTimeHistogram(vehicleDirectory)
+    fig4=processLatencyCounts(vehicleDirectory)
+    app=Dash(__name__)
+    colors = {
+        'background': '#111111',
+        'text': '#7FDBFF'
+    }
+    fig2.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
+    fig1.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
+    fig3.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
+    fig4.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
+    app.layout = html.Div(style={'backgroundColor': colors['background']},children=[
+        html.H1(children='Ship Supply Dashboard Visualization Tool',style={
+            'textAlign': 'center',
+            'color': colors['text']
+        }),
+
+        html.Div(children='''
+            Run: 10/5/22 at 2100
+        ''',style={
+        'textAlign': 'center',
+        'color': colors['text']
+    }),
+
+        dcc.Graph(
+            id='Fueling Histogram',
+            figure=fig1
+        ),
+        dcc.Graph(
+            id='Fueling Timeline',
+            figure=fig2
+        ),dcc.Graph(
+            id='Fuel History',
+            figure=fig3
+        ),dcc.Graph(
+            id='Latency Counts',
+            figure=fig4
+        )
+
+    ])
+    app.run_server(debug=True)
+def processLatencyCounts(directory):
+    for filename in os.listdir(directory):
+        f=os.path.join(directory,filename)
+        #checking if it is a file
+        if os.path.isfile(f) and "XLOG" in filename:
+            #read in a pickle file and assign it to a dataframe called latencyData
+            latencyData=pd.read_pickle(f)
+
+    #create a histogram of the latency data
+    fig = px.histogram(latencyData, x="counts",y="percent")
+    return fig
+
 
 if __name__ == '__main__':
     import sys
@@ -224,22 +351,15 @@ if __name__ == '__main__':
     # CONFIGURE ARGUMENT PARSER
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--examples", help="Display example uses", action="store_true")
-    parser.add_argument("-s", "--source", help="Source Data Directory", default="")
-
+    parser.add_argument("-s", "--depot", help="Source Data Directory", default="")
+    #add a vhicle argument to the argument parser that will be used to specify which vehicle to generate a fuel line graph for
+    parser.add_argument("-v", "--vehicle", help="Vehicle Name", default="")
     args = parser.parse_args()
 
-    # assign directory
-    directory = args.source
-    depotData=pd.DataFrame(columns=["dname",'status', 'st', "et"])
+    generateDashboard(args.depot,args.vehicle)
+    #processLatencyCounts(args.depot)
 
-    # iterate over files in
-    # that directory
-    for filename in os.listdir(directory):
-        f = os.path.join(directory, filename)
-        # checking if it is a file
-        if os.path.isfile(f):
-            if "DEPOT" in filename:
-                print("Depot")
+#def generateFuelTimeHistogram(directory):
 
 
 
