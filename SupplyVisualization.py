@@ -256,6 +256,25 @@ def generateFuelLineGraph(directory):
     for frame in vehicleFrames:
         fig.add_trace(go.Scatter(x=frame['time'], y=frame['level'],mode='lines', name=frame['vname'][0]    ))
     return fig
+def generateLatencyAverageLineGraph(directory):
+    latencyFrames=[]
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "averageLatency" in filename:
+                #read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+                latencyFrame=pd.read_pickle(f)
+                #subtract the earliest time from the time column
+                latencyFrame['time'] = latencyFrame['time'] - latencyFrame['time'].min()
+                #convert the time column to a datetime object
+                latencyFrame['time'] = pd.to_datetime(latencyFrame['time'], unit='s')
+                latencyFrames.append(latencyFrame)
+        #create a scatter plot of the fuel levels of all vehicles
+    fig=go.Figure()
+    for frame in latencyFrames:
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['average'],mode='lines', name=frame['vname'][0]))
+    return fig
 def generateFuelTimeHistogram(directory):
     vehicleFrames=[]
     for filename in os.listdir(directory):
@@ -275,6 +294,7 @@ def generateDashboard(depotDirectory,vehicleDirectory):
     fig2=generateFuelLineGraph(vehicleDirectory)
     fig3=generateFuelTimeHistogram(vehicleDirectory)
     fig4=processLatencyCounts(vehicleDirectory)
+    fig5=generateLatencyAverageLineGraph(vehicleDirectory)
     app=Dash(__name__)
     colors = {
         'background': '#111111',
@@ -296,6 +316,11 @@ def generateDashboard(depotDirectory,vehicleDirectory):
         font_color=colors['text']
     )
     fig4.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
+    fig5.update_layout(
         plot_bgcolor=colors['background'],
         paper_bgcolor=colors['background'],
         font_color=colors['text']
@@ -326,6 +351,9 @@ def generateDashboard(depotDirectory,vehicleDirectory):
         ),dcc.Graph(
             id='Latency Counts',
             figure=fig4
+        ),dcc.Graph(
+            id='Latency Averages',
+            figure=fig5
         )
 
     ])

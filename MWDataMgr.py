@@ -465,6 +465,20 @@ class MWDataMgr:
         temp['time'] = temp['time'].astype(float)
         temp['level'] = temp['level'].astype(float)
         return temp
+    def processLatencyAverageLog(self, data,communityType):
+        temp = pd.DataFrame(columns=['vname','average', 'time'])
+        vehicleName=""
+        if communityType == "vehicle":
+            for key, value in data['data']['FUEL_WAIT_TIME'][0][1].items():
+                vehicleName=key
+        else:
+            vehicleName = "shoreside"
+        for pair in data['data']['LATENCY_AVERAGE']:
+            for key, value in pair[1].items():
+                temp.loc[len(temp.index)] = [vehicleName,value, key]
+        temp['time'] = temp['time'].astype(float)
+        temp['average'] = temp['average'].astype(float)
+        return temp
 
     def processLatencyLogData(self, data):
         temp = pd.DataFrame.from_dict(data['data']['LATENCY_LOG'][0][1], orient='index')
@@ -1152,8 +1166,10 @@ if __name__ == "__main__":
             if args.vehicle:
                 fuelTimeLog=mwDataMgr.processFuelTimeLog(data)
                 fuelWaitTimeLog=mwDataMgr.processFuelWaitLog(data)
+                latencyAverageLog=mwDataMgr.processLatencyAverageLog(data,"vehicle")
             if args.shore:
                 latencyLog=mwDataMgr.processLatencyLogData(data)
+                latencyAverageLogShore=mwDataMgr.processLatencyAverageLog(data,"shoreside")
             if args.depot:
                 depotEventLog=mwDataMgr.processDepotEvents(data)
         elif '._moos' == source[-6:]:
@@ -1204,6 +1220,9 @@ if __name__ == "__main__":
                 output_path = output_directory + data["info"]["alias"]+"_wait"
                 with open(output_path, 'wb') as pickle_file:
                     pickle.dump(fuelWaitTimeLog,pickle_file)
+                output_path = output_directory + data["info"]["alias"] + "_averageLatency"
+                with open(output_path, 'wb') as pickle_file:
+                    pickle.dump(latencyAverageLog, pickle_file)
             elif args.depot:
                 output_path = output_directory + data["info"]["alias"]
                 with open(output_path, 'wb') as pickle_file:
@@ -1212,6 +1231,9 @@ if __name__ == "__main__":
                 output_path = output_directory + data["info"]["alias"]
                 with open(output_path, 'wb') as pickle_file:
                     pickle.dump(latencyLog, pickle_file)
+                output_path = output_directory + data["info"]["alias"] + "_averageLatency"
+                with open(output_path, 'wb') as pickle_file:
+                    pickle.dump(latencyAverageLogShore, pickle_file)
             elif 'csv' in output_types:
                 csv_path = output_directory + data["info"]["alias"] + "_alog_csvs"
                 mwDataMgr.alog_2_csv(data, csv_path, ignore_src=False, force_write=True)
