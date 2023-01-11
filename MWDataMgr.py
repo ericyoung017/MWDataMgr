@@ -266,6 +266,9 @@ class MWDataMgr:
         new_msg = dict()
         for pair in msg.split('|'):
             section = pair.split("=")
+            # test code to see what log isn't working
+            if len(section) != 2:
+                print("Error parsing")
             varname = section[0]
             var = section[1]
             if _isfloat(var):
@@ -457,7 +460,9 @@ class MWDataMgr:
     def processFuelTimeLog(self, data):
         temp = pd.DataFrame(columns=['vname','time', 'level'])
         vehicleName=""
-        for key, value in data['data']['FUEL_WAIT_TIME'][0][1].items():
+        # for key, value in data['data']['FUEL_WAIT_TIME'][0][1].items():
+        #     vehicleName=key
+        for key, value in data['data']['H_COMMUNITY'][0][1].items():
             vehicleName=key
         for pair in data['data']['FUEL_LEVEL_LOG']:
             for key, value in pair[1].items():
@@ -465,11 +470,52 @@ class MWDataMgr:
         temp['time'] = temp['time'].astype(float)
         temp['level'] = temp['level'].astype(float)
         return temp
+    def processEntropyLog(self, data):
+        temp = pd.DataFrame(columns=['time', 'entropy'])
+
+        for pair in data['data']['VORONOI_ENTROPY']:
+            for key, value in pair[1].items():
+                temp.loc[len(temp.index)] = [key, value]
+        temp['time'] = temp['time'].astype(float)
+        temp['entropy'] = temp['entropy'].astype(float)
+        return temp
+    def processAreaLog(self, data):
+        temp = pd.DataFrame(columns=['time', 'region','avgArea',"minArea","maxArea","stdDevArea"])
+        time=0
+        region=""
+        avgArea=0
+        minArea=0
+        maxArea=0
+        stdDevArea=0
+        for pair in data['data']['VORONOI_AREA_STATS']:
+            for key, value in pair[1].items():
+                if key=="time":
+                    time=value
+                elif key=="region":
+                    region=value
+                elif key=="avg_prox_area":
+                    avgArea=value
+                elif key=="min_prox_area":
+                    minArea=value
+                elif key=="max_prox_area":
+                    maxArea=value
+                elif key=="std_dev_prox_area":
+                    stdDevArea=value
+
+            temp.loc[len(temp.index)] = [time,region,avgArea,minArea,maxArea,stdDevArea]
+        temp['time'] = temp['time'].astype(float)
+        temp['avgArea'] = temp['avgArea'].astype(float)
+        temp['minArea'] = temp['minArea'].astype(float)
+        temp['maxArea'] = temp['maxArea'].astype(float)
+        temp['stdDevArea'] = temp['stdDevArea'].astype(float)
+        return temp
     def processLatencyAverageLog(self, data,communityType):
         temp = pd.DataFrame(columns=['vname','average', 'time'])
         vehicleName=""
         if communityType == "vehicle":
-            for key, value in data['data']['FUEL_WAIT_TIME'][0][1].items():
+            # for key, value in data['data']['FUEL_WAIT_TIME'][0][1].items():
+            #     vehicleName=key
+            for key, value in data['data']['H_COMMUNITY'][0][1].items():
                 vehicleName=key
         else:
             vehicleName = "shoreside"
@@ -1165,13 +1211,16 @@ if __name__ == "__main__":
             data = mwDataMgr.get_alog(source, include_only=include_only, exclude=exclude, use_strategies=True)
             if args.vehicle:
                 fuelTimeLog=mwDataMgr.processFuelTimeLog(data)
-                fuelWaitTimeLog=mwDataMgr.processFuelWaitLog(data)
+                #fuelWaitTimeLog=mwDataMgr.processFuelWaitLog(data)
                 latencyAverageLog=mwDataMgr.processLatencyAverageLog(data,"vehicle")
             if args.shore:
-                latencyLog=mwDataMgr.processLatencyLogData(data)
+                #latencyLog=mwDataMgr.processLatencyLogData(data)
                 latencyAverageLogShore=mwDataMgr.processLatencyAverageLog(data,"shoreside")
-            if args.depot:
-                depotEventLog=mwDataMgr.processDepotEvents(data)
+                voronoiEntropyLog=mwDataMgr.processEntropyLog(data)
+                voronoiAreaLog=mwDataMgr.processAreaLog(data)
+            #if args.depot:
+
+                #depotEventLog=mwDataMgr.processDepotEvents(data)
         elif '._moos' == source[-6:]:
             data = mwDataMgr.get_moosconf(source)
             if args.output:
@@ -1218,22 +1267,28 @@ if __name__ == "__main__":
                 with open(output_path, 'wb') as pickle_file:
                     pickle.dump(fuelTimeLog,pickle_file)
                 output_path = output_directory + data["info"]["alias"]+"_wait"
-                with open(output_path, 'wb') as pickle_file:
-                    pickle.dump(fuelWaitTimeLog,pickle_file)
+                # with open(output_path, 'wb') as pickle_file:
+                #     pickle.dump(fuelWaitTimeLog,pickle_file)
                 output_path = output_directory + data["info"]["alias"] + "_averageLatency"
                 with open(output_path, 'wb') as pickle_file:
                     pickle.dump(latencyAverageLog, pickle_file)
             elif args.depot:
                 output_path = output_directory + data["info"]["alias"]
-                with open(output_path, 'wb') as pickle_file:
-                    pickle.dump(depotEventLog,pickle_file)
+                # with open(output_path, 'wb') as pickle_file:
+                #     pickle.dump(depotEventLog,pickle_file)
             elif args.shore:
                 output_path = output_directory + data["info"]["alias"]
-                with open(output_path, 'wb') as pickle_file:
-                    pickle.dump(latencyLog, pickle_file)
+                # with open(output_path, 'wb') as pickle_file:
+                #     pickle.dump(latencyLog, pickle_file)
                 output_path = output_directory + data["info"]["alias"] + "_averageLatency"
                 with open(output_path, 'wb') as pickle_file:
                     pickle.dump(latencyAverageLogShore, pickle_file)
+                output_path = output_directory + data["info"]["alias"] + "_totalEntropy"
+                with open(output_path, 'wb') as pickle_file:
+                    pickle.dump(voronoiEntropyLog, pickle_file)
+                output_path = output_directory + data["info"]["alias"] + "_areaStats"
+                with open(output_path, 'wb') as pickle_file:
+                    pickle.dump(voronoiAreaLog, pickle_file)
             elif 'csv' in output_types:
                 csv_path = output_directory + data["info"]["alias"] + "_alog_csvs"
                 mwDataMgr.alog_2_csv(data, csv_path, ignore_src=False, force_write=True)

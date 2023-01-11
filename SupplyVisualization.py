@@ -12,6 +12,8 @@ from dash import Dash, html, dcc
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import datetime
+from scipy import signal
+
 
 def test():
     df = pd.DataFrame([{'row': 'A',
@@ -46,8 +48,9 @@ def test():
     fig = px.timeline(df, x_start="start_time", x_end="end_time", y="row", color="status")
     fig.show()
 
-def read_list(name,name2):
-  #READ IN ALL OF DEPOT ONE's INFO
+
+def read_list(name, name2):
+    # READ IN ALL OF DEPOT ONE's INFO
     list = []
     f = open(name)
     line = f.readline()
@@ -64,14 +67,14 @@ def read_list(name,name2):
         line = f.readline()
     df = pd.DataFrame([sub.split() for sub in list])
     logFrame = pd.DataFrame([sub.split("-") for sub in df[3]])
-    df2=logFrame[pd.to_numeric(logFrame[2], errors='coerce').notnull()]
-    df2.columns = ['id','vehicle','start', 'end', 'ACTIVITY']
+    df2 = logFrame[pd.to_numeric(logFrame[2], errors='coerce').notnull()]
+    df2.columns = ['id', 'vehicle', 'start', 'end', 'ACTIVITY']
     df3 = df2.copy()
     df3['start'] = df2['start'].astype(float)
     df3['end'] = df2['end'].astype(float)
-  # ---------
+    # ---------
 
-#READ IN ALL OF DEPOT 2's info
+    # READ IN ALL OF DEPOT 2's info
     list = []
     f = open(name2)
     line = f.readline()
@@ -88,25 +91,24 @@ def read_list(name,name2):
         line = f.readline()
     df = pd.DataFrame([sub.split() for sub in list])
     logFrame = pd.DataFrame([sub.split("-") for sub in df[3]])
-    df2=logFrame[pd.to_numeric(logFrame[2], errors='coerce').notnull()]
-    df2.columns = ['id','vehicle','start', 'end', 'ACTIVITY']
+    df2 = logFrame[pd.to_numeric(logFrame[2], errors='coerce').notnull()]
+    df2.columns = ['id', 'vehicle', 'start', 'end', 'ACTIVITY']
     df4 = df2.copy()
     df4['start'] = df2['start'].astype(float)
     df4['end'] = df2['end'].astype(float)
-#----------------------
-    #print(df3)
-    #print(df4)
-    deltaFrame =pd.concat([df3, df4])
-  #SUBTRACT THE EARLIEST MOOSTIME ENTRY TO MAKE EVERYTHING REFERENCED FROM ZERO
-    deltaFrame['start1']=deltaFrame['start']-33296827658
-    deltaFrame['end1']=deltaFrame['end'] - 33296827658
+    # ----------------------
+    # print(df3)
+    # print(df4)
+    deltaFrame = pd.concat([df3, df4])
+    # SUBTRACT THE EARLIEST MOOSTIME ENTRY TO MAKE EVERYTHING REFERENCED FROM ZERO
+    deltaFrame['start1'] = deltaFrame['start'] - 33296827658
+    deltaFrame['end1'] = deltaFrame['end'] - 33296827658
 
-
-#TRIM AND RESET INDEX OF CONCATENATED LIST
-    nf=deltaFrame[['vehicle','start1','end1','ACTIVITY']].copy()
+    # TRIM AND RESET INDEX OF CONCATENATED LIST
+    nf = deltaFrame[['vehicle', 'start1', 'end1', 'ACTIVITY']].copy()
     nf.reset_index(drop=True, inplace=True)
-#Convert our start and end times to datetimes so that they can be correctly read by plotly
-    nf['end1'] = pd.to_datetime(nf['end1'],unit='s')
+    # Convert our start and end times to datetimes so that they can be correctly read by plotly
+    nf['end1'] = pd.to_datetime(nf['end1'], unit='s')
     nf['start1'] = pd.to_datetime(nf['start1'], unit='s')
     fig = px.timeline(
         nf, x_start="start1", x_end="end1", y="vehicle",
@@ -114,8 +116,9 @@ def read_list(name,name2):
         color='ACTIVITY'
 
     )
-    #fig.show()
+    # fig.show()
     return fig
+
 
 # def generateFuelTimeHistogram():
 #     directory="/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/testLogFolder"
@@ -154,8 +157,8 @@ def read_list(name,name2):
 #     #df2 = rawLogData[pd.to_numeric(rawLogData[3], errors='coerce').notnull()]
 
 def generateFuelLineGraph():
-    directory="/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/testLogFolder2"
-    vehicleFrames=[]
+    directory = "/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/testLogFolder2"
+    vehicleFrames = []
     logLines = []
     fig = go.Figure()
     for filename in os.listdir(directory):
@@ -163,7 +166,7 @@ def generateFuelLineGraph():
 
         # checking if it is a file
         if not filename.startswith('.') and os.path.isfile(name):
-            #print(filename)
+            # print(filename)
             f = open(name)
             line = f.readline()
             line = f.readline()
@@ -172,47 +175,49 @@ def generateFuelLineGraph():
             line = f.readline()
             while line:
                 try:
-                    line=f.readline()
-                    #print(line)
+                    line = f.readline()
+                    # print(line)
                     logLines.append(line)
                 except ValueError:
                     print('Error in line :' + line)
-            #create a list of dataframes that hold the "-" separated fuel log data for every vehicle
+            # create a list of dataframes that hold the "-" separated fuel log data for every vehicle
             vehicleFrames.append(pd.DataFrame([sub.split() for sub in logLines])[3])
-            logLines=[]
-    #split the fuel log data by "-"
-    tempProcessedFuelData=[]
+            logLines = []
+    # split the fuel log data by "-"
+    tempProcessedFuelData = []
     for frame in vehicleFrames:
-        tempProcessedFuelData.append(frame.str.split(pat='-',expand =True))
-    #remove None rows from the fuel data
-    dashSegmentedFuelData=[]
+        tempProcessedFuelData.append(frame.str.split(pat='-', expand=True))
+    # remove None rows from the fuel data
+    dashSegmentedFuelData = []
     for frame in tempProcessedFuelData:
         dashSegmentedFuelData.append(frame.replace(to_replace='None', value=np.nan).dropna())
-    finalSegmentedFuelData=[]
-    fig=go.Figure()
+    finalSegmentedFuelData = []
+    fig = go.Figure()
     for frame in dashSegmentedFuelData:
-        #convert fuel and time values to numbers
-        frame[1]=frame[1].astype(float)
-        frame[2]=frame[2].astype(float)
-        #name each column in the dataframe
-        frame.columns=['vehicle','level','time']
-        #remove all starting values with values greater than the fuel tank size (this is for testing only)
-        tempData=frame[(frame['level'] <= 200)]
-        #reset the dataframe index to make up for the values just removed
+        # convert fuel and time values to numbers
+        frame[1] = frame[1].astype(float)
+        frame[2] = frame[2].astype(float)
+        # name each column in the dataframe
+        frame.columns = ['vehicle', 'level', 'time']
+        # remove all starting values with values greater than the fuel tank size (this is for testing only)
+        tempData = frame[(frame['level'] <= 200)]
+        # reset the dataframe index to make up for the values just removed
         tempData.reset_index(inplace=True)
-        #zero out the time data based on the earliest value and convert to a datetime object
+        # zero out the time data based on the earliest value and convert to a datetime object
         tempData['time'] = tempData['time'] - tempData['time'][0]
-        tempData['time'] = pd.to_datetime(tempData['time'],unit='s')
+        tempData['time'] = pd.to_datetime(tempData['time'], unit='s')
         finalSegmentedFuelData.append(tempData)
         fig.add_trace(go.Scatter(x=tempData['time'], y=tempData['level'],
                                  mode='lines',
                                  name=tempData['vehicle'][0]))
     return fig
-    #fig.show()
-    #print(finalSegmentedFuelData[0])
-    #print((dashSegmentedFuelData[0]['level']<=200))
+    # fig.show()
+    # print(finalSegmentedFuelData[0])
+    # print((dashSegmentedFuelData[0]['level']<=200))
 
-    #print(dashSegmentedFuelData[0][(dashSegmentedFuelData[0]['level']<=200)])
+    # print(dashSegmentedFuelData[0][(dashSegmentedFuelData[0]['level']<=200)])
+
+
 def generateDepotTimelines(directory) -> object:
     depotData = pd.DataFrame(columns=["dname", 'status', 'st', "et"])
 
@@ -236,66 +241,119 @@ def generateDepotTimelines(directory) -> object:
     depotData['et'] = pd.to_datetime(depotData['et'], unit='s')
     fig = px.timeline(depotData, x_start="st", x_end="et", y="dname", color='status')
     return fig
-#create a function that will generate a line graph of the fuel levels of all vehicles
+
+
+# create a function that will generate a line graph of the fuel levels of all vehicles
 def generateFuelLineGraph(directory):
-    vehicleFrames=[]
+    vehicleFrames = []
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
         # checking if it is a file
         if os.path.isfile(f):
             if "DEPOT" not in filename and "SHORESIDE" not in filename and "fuelTime" in filename:
-                #read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
-                vehicleFrame=pd.read_pickle(f)
-                #subtract the earliest time from the time column
+                # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+                vehicleFrame = pd.read_pickle(f)
+                # subtract the earliest time from the time column
                 vehicleFrame['time'] = vehicleFrame['time'] - vehicleFrame['time'].min()
-                #convert the time column to a datetime object
+                # convert the time column to a datetime object
                 vehicleFrame['time'] = pd.to_datetime(vehicleFrame['time'], unit='s')
                 vehicleFrames.append(vehicleFrame)
-        #create a scatter plot of the fuel levels of all vehicles
-    fig=go.Figure()
+        # create a scatter plot of the fuel levels of all vehicles
+    fig = go.Figure()
     for frame in vehicleFrames:
-        fig.add_trace(go.Scatter(x=frame['time'], y=frame['level'],mode='lines', name=frame['vname'][0]    ))
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['level'], mode='lines', name=frame['vname'][0]))
+    return fig
+
+# create a function that will generate a line graph of the fuel levels of all vehicles
+def generateEntropyLineGraph(directory):
+    entropyFrames = []
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "SHORESIDE" in filename and "totalEntropy" in filename:
+                # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+                shoreFrame = pd.read_pickle(f)
+                # subtract the earliest time from the time column
+                shoreFrame['time'] = shoreFrame['time'] - shoreFrame['time'].min()
+                # convert the time column to a datetime object
+                shoreFrame['time'] = pd.to_datetime(shoreFrame['time'], unit='s')
+                entropyFrames.append(shoreFrame)
+        # create a scatter plot of the fuel levels of all vehicles
+    fig = go.Figure()
+    for frame in entropyFrames:
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['entropy'], mode='lines', name="Shoreside Global Entropy"))
+        #add a trace with a Moving Average filter
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['entropy'].rolling(window=150).mean(), mode='lines', name="Shoreside Global Entropy (5m MA)"))
+    return fig
+def generateAreaStatsLineGraph(directory):
+    entropyFrames = []
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "SHORESIDE" in filename and "areaStats" in filename:
+                # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+                shoreFrame = pd.read_pickle(f)
+                # subtract the earliest time from the time column
+                shoreFrame['time'] = shoreFrame['time'] - shoreFrame['time'].min()
+                # convert the time column to a datetime object
+                shoreFrame['time'] = pd.to_datetime(shoreFrame['time'], unit='s')
+                entropyFrames.append(shoreFrame)
+        # create a scatter plot of the fuel levels of all vehicles
+    fig = go.Figure()
+    for frame in entropyFrames:
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['avgArea'], mode='lines', name="Average Area"))
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['maxArea'], mode='lines', name="Maximum Area"))
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['minArea'], mode='lines', name="Minimum Area"))
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['stdDevArea'], mode='lines', name="StDev Area"))
     return fig
 def generateLatencyAverageLineGraph(directory):
-    latencyFrames=[]
+    latencyFrames = []
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
         # checking if it is a file
         if os.path.isfile(f):
             if "averageLatency" in filename:
-                #read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
-                latencyFrame=pd.read_pickle(f)
-                #subtract the earliest time from the time column
+                # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+                latencyFrame = pd.read_pickle(f)
+                # subtract the earliest time from the time column
                 latencyFrame['time'] = latencyFrame['time'] - latencyFrame['time'].min()
-                #convert the time column to a datetime object
+                # convert the time column to a datetime object
                 latencyFrame['time'] = pd.to_datetime(latencyFrame['time'], unit='s')
                 latencyFrames.append(latencyFrame)
-        #create a scatter plot of the fuel levels of all vehicles
-    fig=go.Figure()
+        # create a scatter plot of the fuel levels of all vehicles
+    fig = go.Figure()
     for frame in latencyFrames:
-        fig.add_trace(go.Scatter(x=frame['time'], y=frame['average'],mode='lines', name=frame['vname'][0]))
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['average'], mode='lines', name=frame['vname'][0]))
     return fig
+
+
 def generateFuelTimeHistogram(directory):
-    vehicleFrames=[]
+    vehicleFrames = []
     for filename in os.listdir(directory):
-        f=os.path.join(directory,filename)
-        #checking if it is a file
+        f = os.path.join(directory, filename)
+        # checking if it is a file
         if os.path.isfile(f) and "wait" in filename:
-            #read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
-            vehicleFrame=pd.read_pickle(f)
+            # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+            vehicleFrame = pd.read_pickle(f)
             vehicleFrames.append(vehicleFrame)
-    #concatenate all the dataframes into one dataframe called allVehicleData
-    allVehicleData=pd.concat(vehicleFrames)
+    # concatenate all the dataframes into one dataframe called allVehicleData
+    allVehicleData = pd.concat(vehicleFrames)
     fig = px.histogram(allVehicleData, x="time")
-    #fig.show()
+    # fig.show()
     return fig
-def generateDashboard(depotDirectory,vehicleDirectory):
-    fig1=generateDepotTimelines(depotDirectory)
+
+
+def generateDashboard(depotDirectory, vehicleDirectory):
+    # fig1=generateDepotTimelines(depotDirectory)
     fig2=generateFuelLineGraph(vehicleDirectory)
-    fig3=generateFuelTimeHistogram(vehicleDirectory)
-    fig4=processLatencyCounts(vehicleDirectory)
-    fig5=generateLatencyAverageLineGraph(vehicleDirectory)
-    app=Dash(__name__)
+    # fig3=generateFuelTimeHistogram(vehicleDirectory)
+    # fig4=processLatencyCounts(vehicleDirectory)
+    fig5 = generateLatencyAverageLineGraph(vehicleDirectory)
+    fig6 = generateEntropyLineGraph(vehicleDirectory)
+    fig7 = generateAreaStatsLineGraph(vehicleDirectory)
+    app = Dash(__name__)
     colors = {
         'background': '#111111',
         'text': '#7FDBFF'
@@ -305,69 +363,91 @@ def generateDashboard(depotDirectory,vehicleDirectory):
         paper_bgcolor=colors['background'],
         font_color=colors['text']
     )
-    fig1.update_layout(
+    fig6.update_layout(
         plot_bgcolor=colors['background'],
         paper_bgcolor=colors['background'],
         font_color=colors['text']
     )
-    fig3.update_layout(
+    fig7.update_layout(
         plot_bgcolor=colors['background'],
         paper_bgcolor=colors['background'],
         font_color=colors['text']
     )
-    fig4.update_layout(
-        plot_bgcolor=colors['background'],
-        paper_bgcolor=colors['background'],
-        font_color=colors['text']
-    )
+    # fig1.update_layout(
+    #     plot_bgcolor=colors['background'],
+    #     paper_bgcolor=colors['background'],
+    #     font_color=colors['text']
+    # )
+    # fig3.update_layout(
+    #     plot_bgcolor=colors['background'],
+    #     paper_bgcolor=colors['background'],
+    #     font_color=colors['text']
+    # )
+    # fig4.update_layout(
+    #     plot_bgcolor=colors['background'],
+    #     paper_bgcolor=colors['background'],
+    #     font_color=colors['text']
+    # )
     fig5.update_layout(
         plot_bgcolor=colors['background'],
         paper_bgcolor=colors['background'],
         font_color=colors['text']
     )
-    app.layout = html.Div(style={'backgroundColor': colors['background']},children=[
-        html.H1(children='Ship Supply Dashboard Visualization Tool',style={
+    app.layout = html.Div(style={'backgroundColor': colors['background']}, children=[
+        html.H1(children='Ship Supply Dashboard Visualization Tool', style={
             'textAlign': 'center',
             'color': colors['text']
         }),
 
         html.Div(children='''
             Run: 10/5/22 at 2100
-        ''',style={
-        'textAlign': 'center',
-        'color': colors['text']
-    }),
-
-        dcc.Graph(
-            id='Fueling Histogram',
-            figure=fig1
-        ),
+        ''', style={
+            'textAlign': 'center',
+            'color': colors['text']
+        }),
+        #
+        # dcc.Graph(
+        #     id='Fueling Histogram',
+        #     figure=fig1
+        # ),
         dcc.Graph(
             id='Fueling Timeline',
             figure=fig2
         ),dcc.Graph(
-            id='Fuel History',
-            figure=fig3
+            id='Entropy Timeline',
+            figure=fig6
         ),dcc.Graph(
-            id='Latency Counts',
-            figure=fig4
-        ),dcc.Graph(
+            id='Area Stats Timeline',
+            figure=fig7
+        ),
+
+        # , d
+        # cc.Graph(
+        #     id='Fuel History',
+        #     figure=fig3
+        # ), dcc.Graph(
+        #     id='Latency Counts',
+        #     figure=fig4
+        # ),
+        dcc.Graph(
             id='Latency Averages',
             figure=fig5
         )
 
     ])
     app.run_server(debug=True)
+
+
 def processLatencyCounts(directory):
     for filename in os.listdir(directory):
-        f=os.path.join(directory,filename)
-        #checking if it is a file
+        f = os.path.join(directory, filename)
+        # checking if it is a file
         if os.path.isfile(f) and "XLOG" in filename:
-            #read in a pickle file and assign it to a dataframe called latencyData
-            latencyData=pd.read_pickle(f)
+            # read in a pickle file and assign it to a dataframe called latencyData
+            latencyData = pd.read_pickle(f)
 
-    #create a histogram of the latency data
-    fig = px.histogram(latencyData, x="counts",y="percent")
+    # create a histogram of the latency data
+    fig = px.histogram(latencyData, x="counts", y="percent")
     return fig
 
 
@@ -380,69 +460,65 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--examples", help="Display example uses", action="store_true")
     parser.add_argument("-s", "--depot", help="Source Data Directory", default="")
-    #add a vhicle argument to the argument parser that will be used to specify which vehicle to generate a fuel line graph for
+    # add a vhicle argument to the argument parser that will be used to specify which vehicle to generate a fuel line graph for
     parser.add_argument("-v", "--vehicle", help="Vehicle Name", default="")
     args = parser.parse_args()
 
-    generateDashboard(args.depot,args.vehicle)
-    #processLatencyCounts(args.depot)
+    generateDashboard(args.depot, args.vehicle)
+    # processLatencyCounts(args.depot)
 
-#def generateFuelTimeHistogram(directory):
-
-
+# def generateFuelTimeHistogram(directory):
 
 
-    # fig1 = generateFuelTimeHistogram()
-    # fig2= read_list("/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/LOG_DEPOT_ONE_3_10_2022_____19_56_21/LOG_DEPOT_ONE_3_10_2022_____19_56_21.alog","/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/LOG_DEPOT_TWO_3_10_2022_____19_56_21/LOG_DEPOT_TWO_3_10_2022_____19_56_21.alog")
-    # fig3=generateFuelLineGraph()
-    # app=Dash(__name__)
-    # colors = {
-    #     'background': '#111111',
-    #     'text': '#7FDBFF'
-    # }
-    # fig2.update_layout(
-    #     plot_bgcolor=colors['background'],
-    #     paper_bgcolor=colors['background'],
-    #     font_color=colors['text']
-    # )
-    # fig1.update_layout(
-    #     plot_bgcolor=colors['background'],
-    #     paper_bgcolor=colors['background'],
-    #     font_color=colors['text']
-    # )
-    # fig3.update_layout(
-    #     plot_bgcolor=colors['background'],
-    #     paper_bgcolor=colors['background'],
-    #     font_color=colors['text']
-    # )
-    # app.layout = html.Div(style={'backgroundColor': colors['background']},children=[
-    #     html.H1(children='Ship Supply Dashboard Visualization Tool',style={
-    #         'textAlign': 'center',
-    #         'color': colors['text']
-    #     }),
-    #
-    #     html.Div(children='''
-    #         Run: 10/5/22 at 2100
-    #     ''',style={
-    #     'textAlign': 'center',
-    #     'color': colors['text']
-    # }),
-    #
-    #     dcc.Graph(
-    #         id='Fueling Histogram',
-    #         figure=fig1
-    #     ),
-    #     dcc.Graph(
-    #         id='Fueling Timeline',
-    #         figure=fig2
-    #     ),dcc.Graph(
-    #         id='Fuel History',
-    #         figure=fig3
-    #     )
-    #
-    # ])
-    # app.run_server(debug=True)
+# fig1 = generateFuelTimeHistogram()
+# fig2= read_list("/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/LOG_DEPOT_ONE_3_10_2022_____19_56_21/LOG_DEPOT_ONE_3_10_2022_____19_56_21.alog","/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/LOG_DEPOT_TWO_3_10_2022_____19_56_21/LOG_DEPOT_TWO_3_10_2022_____19_56_21.alog")
+# fig3=generateFuelLineGraph()
+# app=Dash(__name__)
+# colors = {
+#     'background': '#111111',
+#     'text': '#7FDBFF'
+# }
+# fig2.update_layout(
+#     plot_bgcolor=colors['background'],
+#     paper_bgcolor=colors['background'],
+#     font_color=colors['text']
+# )
+# fig1.update_layout(
+#     plot_bgcolor=colors['background'],
+#     paper_bgcolor=colors['background'],
+#     font_color=colors['text']
+# )
+# fig3.update_layout(
+#     plot_bgcolor=colors['background'],
+#     paper_bgcolor=colors['background'],
+#     font_color=colors['text']
+# )
+# app.layout = html.Div(style={'backgroundColor': colors['background']},children=[
+#     html.H1(children='Ship Supply Dashboard Visualization Tool',style={
+#         'textAlign': 'center',
+#         'color': colors['text']
+#     }),
+#
+#     html.Div(children='''
+#         Run: 10/5/22 at 2100
+#     ''',style={
+#     'textAlign': 'center',
+#     'color': colors['text']
+# }),
+#
+#     dcc.Graph(
+#         id='Fueling Histogram',
+#         figure=fig1
+#     ),
+#     dcc.Graph(
+#         id='Fueling Timeline',
+#         figure=fig2
+#     ),dcc.Graph(
+#         id='Fuel History',
+#         figure=fig3
+#     )
+#
+# ])
+# app.run_server(debug=True)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
-
-
