@@ -328,6 +328,24 @@ def generateLatencyAverageLineGraph(directory):
         fig.add_trace(go.Scatter(x=frame['time'], y=frame['average'], mode='lines', name=frame['vname'][0]))
     return fig
 
+def generateVehicleFuelingCountLineGraph(directory):
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "vehicleFuelingCount" in filename:
+                # read in the pickle file, create a dataframe
+                frame = pd.read_pickle(f)
+                # subtract the earliest time from the time column
+                frame['time'] = frame['time'] - frame['time'].min()
+                # convert the time column to a datetime object
+                frame['time'] = pd.to_datetime(frame['time'], unit='s')
+                frame.append(frame)
+        # create a scatter plot of the count of all vehicles currently fueling
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=frame['time'], y=frame['count'], mode='lines', name="Number of Vehicles Fueling"))
+    return fig
+
 
 def generateFuelTimeHistogram(directory):
     vehicleFrames = []
@@ -353,6 +371,8 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     fig5 = generateLatencyAverageLineGraph(vehicleDirectory)
     fig6 = generateEntropyLineGraph(vehicleDirectory)
     fig7 = generateAreaStatsLineGraph(vehicleDirectory)
+    fig8 = generateVehicleFuelingCountLineGraph(vehicleDirectory)
+
     app = Dash(__name__)
     colors = {
         'background': '#111111',
@@ -369,6 +389,11 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         font_color=colors['text']
     )
     fig7.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
+    fig8.update_layout(
         plot_bgcolor=colors['background'],
         paper_bgcolor=colors['background'],
         font_color=colors['text']
@@ -416,6 +441,9 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         ),dcc.Graph(
             id='Entropy Timeline',
             figure=fig6
+        ),dcc.Graph(
+            id='Fueling Count Timeline',
+            figure=fig8
         ),dcc.Graph(
             id='Area Stats Timeline',
             figure=fig7

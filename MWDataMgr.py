@@ -470,6 +470,15 @@ class MWDataMgr:
         temp['time'] = temp['time'].astype(float)
         temp['level'] = temp['level'].astype(float)
         return temp
+    def processVehicleFuelingCountTimeLog(self, data):
+        temp = pd.DataFrame(columns=['time', 'count'])
+
+        for pair in data['data']['VEHICLES_FUELING']:
+            for key, value in pair[1].items():
+                temp.loc[len(temp.index)] = [key, value]
+        temp['time'] = temp['time'].astype(float)
+        temp['count'] = temp['count'].astype(float)
+        return temp
     def processEntropyLog(self, data):
         temp = pd.DataFrame(columns=['time', 'entropy'])
 
@@ -1218,6 +1227,7 @@ if __name__ == "__main__":
                 latencyAverageLogShore=mwDataMgr.processLatencyAverageLog(data,"shoreside")
                 voronoiEntropyLog=mwDataMgr.processEntropyLog(data)
                 voronoiAreaLog=mwDataMgr.processAreaLog(data)
+                vehicleFuelingCountLog=mwDataMgr.processVehicleFuelingCountTimeLog(data)
             #if args.depot:
 
                 #depotEventLog=mwDataMgr.processDepotEvents(data)
@@ -1289,6 +1299,9 @@ if __name__ == "__main__":
                 output_path = output_directory + data["info"]["alias"] + "_areaStats"
                 with open(output_path, 'wb') as pickle_file:
                     pickle.dump(voronoiAreaLog, pickle_file)
+                output_path = output_directory + data["info"]["alias"] + "_vehicleFuelingCount"
+                with open(output_path, 'wb') as pickle_file:
+                    pickle.dump(vehicleFuelingCountLog, pickle_file)
             elif 'csv' in output_types:
                 csv_path = output_directory + data["info"]["alias"] + "_alog_csvs"
                 mwDataMgr.alog_2_csv(data, csv_path, ignore_src=False, force_write=True)

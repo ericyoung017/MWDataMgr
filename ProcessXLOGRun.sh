@@ -21,7 +21,7 @@ for entry in "$MISSION_DIRECTORY"/XLOG*/*.alog
 do
   #echo $entry
   cp $entry "$SHORE_DATA_DIRECTORY"
-  python3 ./MWDataMgr.py -s $entry -o output_files -i $SHORE_TOPICS --shore --moos --script --topic_mapping $SHORE_TOPICS_MAPPING
+  python3 ./MWDataMgr.py -s $entry -o output_files -i $SHORE_TOPICS --shore --moos --script --topic_mapping $SHORE_TOPICS_MAPPING &
 done
 
 for entry in "$MISSION_DIRECTORY"/LOG*/*.alog
@@ -29,7 +29,7 @@ do
   if ! [[ "$entry"  =~ .*"DEPOT".* ]]; then
     #echo $entry
     cp $entry "$VEHICLE_DATA_DIRECTORY"
-    python3 ./MWDataMgr.py -s $entry -o output_files -i $VEHICLE_TOPICS --vehicle --moos --script --topic_mapping $VEHICLE_TOPICS_MAPPING
+    python3 ./MWDataMgr.py -s $entry -o output_files -i $VEHICLE_TOPICS --vehicle --moos --script --topic_mapping $VEHICLE_TOPICS_MAPPING &
   fi
 done
 
@@ -38,6 +38,6 @@ do
   if [[ "$entry"  =~ .*"DEPOT".* ]]; then
     #echo $entry
     cp $entry "$DEPOT_DATA_DIRECTORY"
-    python3 ./MWDataMgr.py -s $entry -o output_files -i $DEPOT_TOPICS --depot --moos --script --topic_mapping $DEPOT_TOPICS_MAPPING
+    python3 ./MWDataMgr.py -s $entry -o output_files -i $DEPOT_TOPICS --depot --moos --script --topic_mapping $DEPOT_TOPICS_MAPPING &
   fi
 done
