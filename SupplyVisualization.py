@@ -204,6 +204,7 @@ def generateFuelLineGraph():
         # reset the dataframe index to make up for the values just removed
         tempData.reset_index(inplace=True)
         # zero out the time data based on the earliest value and convert to a datetime object
+
         tempData['time'] = tempData['time'] - tempData['time'][0]
         tempData['time'] = pd.to_datetime(tempData['time'], unit='s')
         finalSegmentedFuelData.append(tempData)
@@ -244,7 +245,7 @@ def generateDepotTimelines(directory) -> object:
 
 
 # create a function that will generate a line graph of the fuel levels of all vehicles
-def generateFuelLineGraph(directory):
+def generateFuelLineGraph(directory,syncTime):
     vehicleFrames = []
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
@@ -253,6 +254,10 @@ def generateFuelLineGraph(directory):
             if "DEPOT" not in filename and "SHORESIDE" not in filename and "fuelTime" in filename:
                 # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
                 vehicleFrame = pd.read_pickle(f)
+                #syncTimes with all other moos logs
+                vehicleFrame = vehicleFrame.loc[vehicleFrame['time'] > syncTime]
+                #reset index
+                vehicleFrame.reset_index(inplace=True)
                 # subtract the earliest time from the time column
                 vehicleFrame['time'] = vehicleFrame['time'] - vehicleFrame['time'].min()
                 # convert the time column to a datetime object
@@ -265,7 +270,7 @@ def generateFuelLineGraph(directory):
     return fig
 
 # create a function that will generate a line graph of the fuel levels of all vehicles
-def generateEntropyLineGraph(directory):
+def generateEntropyLineGraph(directory,syncTime):
     entropyFrames = []
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
@@ -274,6 +279,8 @@ def generateEntropyLineGraph(directory):
             if "SHORESIDE" in filename and "totalEntropy" in filename:
                 # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
                 shoreFrame = pd.read_pickle(f)
+                #syncTimes with all other moos logs
+                shoreFrame = shoreFrame.loc[shoreFrame['time'] > syncTime]
                 # subtract the earliest time from the time column
                 shoreFrame['time'] = shoreFrame['time'] - shoreFrame['time'].min()
                 # convert the time column to a datetime object
@@ -286,7 +293,7 @@ def generateEntropyLineGraph(directory):
         #add a trace with a Moving Average filter
         fig.add_trace(go.Scatter(x=frame['time'], y=frame['entropy'].rolling(window=150).mean(), mode='lines', name="Shoreside Global Entropy (5m MA)"))
     return fig
-def generateAreaStatsLineGraph(directory):
+def generateAreaStatsLineGraph(directory,syncTime):
     entropyFrames = []
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
@@ -295,6 +302,8 @@ def generateAreaStatsLineGraph(directory):
             if "SHORESIDE" in filename and "areaStats" in filename:
                 # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
                 shoreFrame = pd.read_pickle(f)
+                #syncTimes with all other moos logs
+                shoreFrame = shoreFrame.loc[shoreFrame['time'] > syncTime]
                 # subtract the earliest time from the time column
                 shoreFrame['time'] = shoreFrame['time'] - shoreFrame['time'].min()
                 # convert the time column to a datetime object
@@ -308,7 +317,7 @@ def generateAreaStatsLineGraph(directory):
         fig.add_trace(go.Scatter(x=frame['time'], y=frame['minArea'], mode='lines', name="Minimum Area"))
         fig.add_trace(go.Scatter(x=frame['time'], y=frame['stdDevArea'], mode='lines', name="StDev Area"))
     return fig
-def generateLatencyAverageLineGraph(directory):
+def generateLatencyAverageLineGraph(directory,syncTime):
     latencyFrames = []
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
@@ -317,6 +326,12 @@ def generateLatencyAverageLineGraph(directory):
             if "averageLatency" in filename:
                 # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
                 latencyFrame = pd.read_pickle(f)
+
+                #syncTimes with all other moos logs
+                latencyFrame = latencyFrame.loc[latencyFrame['time'] > syncTime]
+                # reset index
+                latencyFrame.reset_index(inplace=True)
+
                 # subtract the earliest time from the time column
                 latencyFrame['time'] = latencyFrame['time'] - latencyFrame['time'].min()
                 # convert the time column to a datetime object
@@ -326,9 +341,12 @@ def generateLatencyAverageLineGraph(directory):
     fig = go.Figure()
     for frame in latencyFrames:
         fig.add_trace(go.Scatter(x=frame['time'], y=frame['average'], mode='lines', name=frame['vname'][0]))
+        #generate the second derivative of the average latency
+        fig.add_trace(go.Scatter(x=frame['time'], y=frame['average']-2*frame['average'].shift(1)+frame['average'].shift(2), mode='lines', name=frame['vname'][0]+" Second Derivative"))
+
     return fig
 
-def generateVehicleFuelingCountLineGraph(directory):
+def generateVehicleFuelingCountLineGraph(directory,syncTime):
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
         # checking if it is a file
@@ -336,6 +354,9 @@ def generateVehicleFuelingCountLineGraph(directory):
             if "vehicleFuelingCount" in filename:
                 # read in the pickle file, create a dataframe
                 frame = pd.read_pickle(f)
+                #syncTimes with all other moos logs
+                frame = frame.loc[frame['time'] > syncTime]
+
                 # subtract the earliest time from the time column
                 frame['time'] = frame['time'] - frame['time'].min()
                 # convert the time column to a datetime object
@@ -361,17 +382,43 @@ def generateFuelTimeHistogram(directory):
     fig = px.histogram(allVehicleData, x="time")
     # fig.show()
     return fig
+def findTimeVehiclesStabilized(directory,):
+    threshold=7000
+    stabilizedTimes= []
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "DEPOT" not in filename and "SHORESIDE" not in filename and "fuelTime" in filename:
+                # In this case, we just want to see the first time when a vehcles fuel level is below the threshold. This means that the simulation has stabilized and given the ships real fuel levels
+                vehicleFrame = pd.read_pickle(f)
+                vehicleFrame=vehicleFrame.loc[vehicleFrame['level'] < threshold]
+                stabilizedTimes.append( vehicleFrame['time'].min())
+    return max(stabilizedTimes)
+def generateSyncTime(directory):
+    #in this case, we need to read in all the pickled dataframes, find the minumum time in each frame, and then find the maximum of those minimum times
+    minTimes=[]
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "LOG" in filename:
+                frame = pd.read_pickle(f)
+                minTimes.append(frame['time'].min())
+    return max(minTimes)
 
 
 def generateDashboard(depotDirectory, vehicleDirectory):
     # fig1=generateDepotTimelines(depotDirectory)
-    fig2=generateFuelLineGraph(vehicleDirectory)
+    #syncTime=generateSyncTime(depotDirectory)
+    syncTime=findTimeVehiclesStabilized(vehicleDirectory)
+    fig2=generateFuelLineGraph(vehicleDirectory,syncTime)
     # fig3=generateFuelTimeHistogram(vehicleDirectory)
-    # fig4=processLatencyCounts(vehicleDirectory)
-    fig5 = generateLatencyAverageLineGraph(vehicleDirectory)
-    fig6 = generateEntropyLineGraph(vehicleDirectory)
-    fig7 = generateAreaStatsLineGraph(vehicleDirectory)
-    fig8 = generateVehicleFuelingCountLineGraph(vehicleDirectory)
+    fig4 = generateIdleTimeHistogram(vehicleDirectory,syncTime)
+    fig5 = generateLatencyAverageLineGraph(vehicleDirectory,syncTime)
+    fig6 = generateEntropyLineGraph(vehicleDirectory,syncTime)
+    fig7 = generateAreaStatsLineGraph(vehicleDirectory,syncTime)
+    fig8 = generateVehicleFuelingCountLineGraph(vehicleDirectory,syncTime)
 
     app = Dash(__name__)
     colors = {
@@ -408,11 +455,11 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     #     paper_bgcolor=colors['background'],
     #     font_color=colors['text']
     # )
-    # fig4.update_layout(
-    #     plot_bgcolor=colors['background'],
-    #     paper_bgcolor=colors['background'],
-    #     font_color=colors['text']
-    # )
+    fig4.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
     fig5.update_layout(
         plot_bgcolor=colors['background'],
         paper_bgcolor=colors['background'],
@@ -447,16 +494,16 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         ),dcc.Graph(
             id='Area Stats Timeline',
             figure=fig7
-        ),
+        # ),
 
         # , d
         # cc.Graph(
         #     id='Fuel History',
         #     figure=fig3
-        # ), dcc.Graph(
-        #     id='Latency Counts',
-        #     figure=fig4
-        # ),
+        ), dcc.Graph(
+            id='Average Idle Time Histogram (Seconds)',
+            figure=fig4
+        ),
         dcc.Graph(
             id='Latency Averages',
             figure=fig5
@@ -477,7 +524,19 @@ def processLatencyCounts(directory):
     # create a histogram of the latency data
     fig = px.histogram(latencyData, x="counts", y="percent")
     return fig
+def generateIdleTimeHistogram(directory,syncTime):
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f) and "averageLatency" in filename:
+            # read in a pickle file and assign it to a dataframe called latencyData
+            latencyData = pd.read_pickle(f)
+            #remove all the data before the sync time
+            latencyData=latencyData.loc[latencyData['time'] > syncTime]
 
+    # create a histogram of the latency data
+    fig = px.histogram(latencyData, x="average")
+    return fig
 
 if __name__ == '__main__':
     import sys

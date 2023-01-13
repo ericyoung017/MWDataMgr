@@ -1221,7 +1221,7 @@ if __name__ == "__main__":
             if args.vehicle:
                 fuelTimeLog=mwDataMgr.processFuelTimeLog(data)
                 #fuelWaitTimeLog=mwDataMgr.processFuelWaitLog(data)
-                latencyAverageLog=mwDataMgr.processLatencyAverageLog(data,"vehicle")
+                #latencyAverageLog=mwDataMgr.processLatencyAverageLog(data,"vehicle")
             if args.shore:
                 #latencyLog=mwDataMgr.processLatencyLogData(data)
                 latencyAverageLogShore=mwDataMgr.processLatencyAverageLog(data,"shoreside")
@@ -1279,9 +1279,9 @@ if __name__ == "__main__":
                 output_path = output_directory + data["info"]["alias"]+"_wait"
                 # with open(output_path, 'wb') as pickle_file:
                 #     pickle.dump(fuelWaitTimeLog,pickle_file)
-                output_path = output_directory + data["info"]["alias"] + "_averageLatency"
-                with open(output_path, 'wb') as pickle_file:
-                    pickle.dump(latencyAverageLog, pickle_file)
+                # output_path = output_directory + data["info"]["alias"] + "_averageLatency"
+                # with open(output_path, 'wb') as pickle_file:
+                #     pickle.dump(latencyAverageLog, pickle_file)
             elif args.depot:
                 output_path = output_directory + data["info"]["alias"]
                 # with open(output_path, 'wb') as pickle_file:
