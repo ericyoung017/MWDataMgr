@@ -2,13 +2,17 @@
 
 # Press ⌃R to execute it or replace it with your code.
 # Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+import math
+from random import random
 
+import numpy
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import os
 import numpy as np
-from dash import Dash, html, dcc
+from dash import Dash, html, dcc,Input, Output, callback, dash_table
+import dash_bootstrap_components as dbc
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import datetime
@@ -341,11 +345,54 @@ def generateLatencyAverageLineGraph(directory,syncTime):
     fig = go.Figure()
     for frame in latencyFrames:
         fig.add_trace(go.Scatter(x=frame['time'], y=frame['average'], mode='lines', name=frame['vname'][0]))
-        #generate the second derivative of the average latency
-        fig.add_trace(go.Scatter(x=frame['time'], y=frame['average']-2*frame['average'].shift(1)+frame['average'].shift(2), mode='lines', name=frame['vname'][0]+" Second Derivative"))
 
     return fig
+def computeShoresideLatencyAverage(directory,syncTime):
+    latencyFrames = []
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "averageLatency" in filename:
+                # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+                latencyFrame = pd.read_pickle(f)
 
+                #syncTimes with all other moos logs
+                latencyFrame = latencyFrame.loc[latencyFrame['time'] > syncTime]
+                # reset index
+                latencyFrame.reset_index(inplace=True)
+
+                # subtract the earliest time from the time column
+                latencyFrame['time'] = latencyFrame['time'] - latencyFrame['time'].min()
+                # convert the time column to a datetime object
+                latencyFrame['time'] = pd.to_datetime(latencyFrame['time'], unit='s')
+                latencyFrames.append(latencyFrame)
+
+    for frame in latencyFrames:
+        return frame['average'].mean()
+
+    return None
+def computeAreaAverage(directory,syncTime):
+    areaFrames = []
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "SHORESIDE" in filename and "areaStats" in filename:
+                # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+                shoreFrame = pd.read_pickle(f)
+                #syncTimes with all other moos logs
+                shoreFrame = shoreFrame.loc[shoreFrame['time'] > syncTime]
+                # subtract the earliest time from the time column
+                shoreFrame['time'] = shoreFrame['time'] - shoreFrame['time'].min()
+                # convert the time column to a datetime object
+                shoreFrame['time'] = pd.to_datetime(shoreFrame['time'], unit='s')
+                areaFrames.append(shoreFrame)
+
+    for frame in areaFrames:
+        return frame['avgArea'].mean()
+
+    return None
 def generateVehicleFuelingCountLineGraph(directory,syncTime):
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
@@ -407,92 +454,213 @@ def generateSyncTime(directory):
                 minTimes.append(frame['time'].min())
     return max(minTimes)
 
-
+def generateAverageIdleTimeDataFrame(directory):
+    #create a set of all tank sizes
+    tankSizes = set()
+    #create a set of all depot numbers
+    depotNumbers = set()
+    #determine all the unique tank sizes and depot numbers
+    for run in os.listdir(directory):
+        if "tank_" in run:
+            #split the run name using "-" as the delimiter into number of depots and tank size
+            depotNum=run.split("-")[0].split("_")[1]
+            tankSize=run.split("-")[1].split("_")[1]
+            #add the tank size and depot number to the sets
+            tankSizes.add(tankSize)
+            depotNumbers.add(depotNum)
+    #sort the tank sizes and depot numbers
+    tankSizes=sorted(tankSizes)
+    depotNumbers=sorted(depotNumbers)
+    #create a pandas datafrome using tank sizes as columhs and depot numbers as rows
+    df = pd.DataFrame(index=depotNumbers, columns=tankSizes)
+    #create column in the dataframe for the number of depots
+    df.insert(0, "Number of Depots", depotNumbers)
+    #iterate through the tank sizes and depot numbers in the dataframe and set the value to a random number between zero and 1
+    for tankSize in tankSizes:
+        for depotNum in depotNumbers:
+            runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize))
+            syncTime=findTimeVehiclesStabilized(runDirectory)
+            df[tankSize][depotNum]= round(computeShoresideLatencyAverage(runDirectory, syncTime),2)
+    return df
+def generateAverageAreaDataFrame(directory):
+    #create a set of all tank sizes
+    tankSizes = set()
+    #create a set of all depot numbers
+    depotNumbers = set()
+    #determine all the unique tank sizes and depot numbers
+    for run in os.listdir(directory):
+        if "tank_" in run:
+            #split the run name using "-" as the delimiter into number of depots and tank size
+            depotNum=run.split("-")[0].split("_")[1]
+            tankSize=run.split("-")[1].split("_")[1]
+            #add the tank size and depot number to the sets
+            tankSizes.add(tankSize)
+            depotNumbers.add(depotNum)
+    #sort the tank sizes and depot numbers
+    tankSizes=sorted(tankSizes)
+    depotNumbers=sorted(depotNumbers)
+    #create a pandas datafrome using tank sizes as columhs and depot numbers as rows
+    df = pd.DataFrame(index=depotNumbers, columns=tankSizes)
+    #create column in the dataframe for the number of depots
+    df.insert(0, "Number of Depots", depotNumbers)
+    #iterate through the tank sizes and depot numbers in the dataframe and set the value to a random number between zero and 1
+    for tankSize in tankSizes:
+        for depotNum in depotNumbers:
+            runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize))
+            syncTime=findTimeVehiclesStabilized(runDirectory)
+            df[tankSize][depotNum]= round(computeAreaAverage(runDirectory, syncTime),2)
+    return df
+def generateSummaryDataFrame(directory):
+    #create a set of all tank sizes
+    tankSizes = set()
+    #create a set of all depot numbers
+    depotNumbers = set()
+    #determine all the unique tank sizes and depot numbers
+    for run in os.listdir(directory):
+        if "tank_" in run:
+            #split the run name using "-" as the delimiter into number of depots and tank size
+            depotNum=run.split("-")[0].split("_")[1]
+            tankSize=run.split("-")[1].split("_")[1]
+            #add the tank size and depot number to the sets
+            tankSizes.add(tankSize)
+            depotNumbers.add(depotNum)
+    #sort the tank sizes and depot numbers
+    tankSizes=sorted(tankSizes)
+    depotNumbers=sorted(depotNumbers)
+    #create a pandas datafrome using tank sizes as columhs and depot numbers as rows
+    df = pd.DataFrame(index=depotNumbers, columns=tankSizes)
+    #create column in the dataframe for the number of depots
+    df.insert(0, "Number of Depots", depotNumbers)
+    areaDF=generateAverageAreaDataFrame(directory)
+    idleDF=generateAverageIdleTimeDataFrame(directory)
+    #iterate through the tank sizes and depot numbers in the dataframe and set the to the string concatination of the other area and idle time dataframes
+    for tankSize in tankSizes:
+        for depotNum in depotNumbers:
+            runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize))
+            syncTime=findTimeVehiclesStabilized(runDirectory)
+            df[tankSize][depotNum]= str(areaDF[tankSize][depotNum]) + " / " + str(idleDF[tankSize][depotNum])
+    return df
 def generateDashboard(depotDirectory, vehicleDirectory):
     # fig1=generateDepotTimelines(depotDirectory)
-    #syncTime=generateSyncTime(depotDirectory)
-    syncTime=findTimeVehiclesStabilized(vehicleDirectory)
-    fig2=generateFuelLineGraph(vehicleDirectory,syncTime)
-    # fig3=generateFuelTimeHistogram(vehicleDirectory)
-    fig4 = generateIdleTimeHistogram(vehicleDirectory,syncTime)
-    fig5 = generateLatencyAverageLineGraph(vehicleDirectory,syncTime)
-    fig6 = generateEntropyLineGraph(vehicleDirectory,syncTime)
-    fig7 = generateAreaStatsLineGraph(vehicleDirectory,syncTime)
-    fig8 = generateVehicleFuelingCountLineGraph(vehicleDirectory,syncTime)
+    #Generate default figures to be updated by the callback
+    fig2= go.Figure()
+    fig3= go.Figure()
+    fig4= go.Figure()
+    fig5= go.Figure()
+    fig6= go.Figure()
+    fig7= go.Figure()
+    fig8= go.Figure()
 
-    app = Dash(__name__)
+    #syncTime=generateSyncTime(depotDirectory)
+
+    df=generateSummaryDataFrame(vehicleDirectory)
+
+    app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
     colors = {
-        'background': '#111111',
-        'text': '#7FDBFF'
+      'background': '#111111',
+       'text': '#7FDBFF'
     }
-    fig2.update_layout(
-        plot_bgcolor=colors['background'],
-        paper_bgcolor=colors['background'],
-        font_color=colors['text']
-    )
-    fig6.update_layout(
-        plot_bgcolor=colors['background'],
-        paper_bgcolor=colors['background'],
-        font_color=colors['text']
-    )
-    fig7.update_layout(
-        plot_bgcolor=colors['background'],
-        paper_bgcolor=colors['background'],
-        font_color=colors['text']
-    )
-    fig8.update_layout(
-        plot_bgcolor=colors['background'],
-        paper_bgcolor=colors['background'],
-        font_color=colors['text']
-    )
-    # fig1.update_layout(
+
+        # f = os.path.join(vehicleDirectory, filename)
+        # # checking if it is a file
+        # if os.path.isfile(f):
+        #     if "" in filename:
+        #         frame = pd.read_pickle(f)
+        #         minTimes.append(frame['time'].min())
+    # syncTime=findTimeVehiclesStabilized(vehicleDirectory)
+    # fig2=generateFuelLineGraph(vehicleDirectory,syncTime)
+    # # fig3=generateFuelTimeHistogram(vehicleDirectory)
+    # fig4 = generateIdleTimeHistogram(vehicleDirectory,syncTime)
+    # fig5 = generateLatencyAverageLineGraph(vehicleDirectory,syncTime)
+    # fig6 = generateEntropyLineGraph(vehicleDirectory,syncTime)
+    # fig7 = generateAreaStatsLineGraph(vehicleDirectory,syncTime)
+    # fig8 = generateVehicleFuelingCountLineGraph(vehicleDirectory,syncTime)
+    #
+
+    # fig2.update_layout(
     #     plot_bgcolor=colors['background'],
     #     paper_bgcolor=colors['background'],
     #     font_color=colors['text']
     # )
-    # fig3.update_layout(
+    # fig6.update_layout(
     #     plot_bgcolor=colors['background'],
     #     paper_bgcolor=colors['background'],
     #     font_color=colors['text']
     # )
-    fig4.update_layout(
-        plot_bgcolor=colors['background'],
-        paper_bgcolor=colors['background'],
-        font_color=colors['text']
-    )
-    fig5.update_layout(
-        plot_bgcolor=colors['background'],
-        paper_bgcolor=colors['background'],
-        font_color=colors['text']
-    )
+    # fig7.update_layout(
+    #     plot_bgcolor=colors['background'],
+    #     paper_bgcolor=colors['background'],
+    #     font_color=colors['text']
+    # )
+    # fig8.update_layout(
+    #     plot_bgcolor=colors['background'],
+    #     paper_bgcolor=colors['background'],
+    #     font_color=colors['text']
+    # )
+    # # fig1.update_layout(
+    # #     plot_bgcolor=colors['background'],
+    # #     paper_bgcolor=colors['background'],
+    # #     font_color=colors['text']
+    # # )
+    # # fig3.update_layout(
+    # #     plot_bgcolor=colors['background'],
+    # #     paper_bgcolor=colors['background'],
+    # #     font_color=colors['text']
+    # # )
+    # fig4.update_layout(
+    #     plot_bgcolor=colors['background'],
+    #     paper_bgcolor=colors['background'],
+    #     font_color=colors['text']
+    # )
+    # fig5.update_layout(
+    #     plot_bgcolor=colors['background'],
+    #     paper_bgcolor=colors['background'],
+    #     font_color=colors['text']
+    # )
     app.layout = html.Div(style={'backgroundColor': colors['background']}, children=[
         html.H1(children='Ship Supply Dashboard Visualization Tool', style={
             'textAlign': 'center',
             'color': colors['text']
-        }),
-
-        html.Div(children='''
-            Run: 10/5/22 at 2100
-        ''', style={
+        }),dbc.Container([
+    dbc.Label('Click a cell in the table:', style={
             'textAlign': 'center',
             'color': colors['text']
         }),
-        #
-        # dcc.Graph(
-        #     id='Fueling Histogram',
-        #     figure=fig1
+    dash_table.DataTable(df.to_dict('records'),[{"name": i, "id": i} for i in df.columns], id='tbl',style_data={
+        'backgroundColor': colors['background'],
+        'color': colors['text']
+    },style_header={
+        'backgroundColor': 'rgb(30, 30, 30)',
+        'color': colors['text']
+    }),
+    dbc.Alert(id='tbl_out')
+
+]),
+    #
+    #     html.Div(children='''
+    #         Run: 10/5/22 at 2100
+    #     ''', style={
+    #         'textAlign': 'center',
+    #         'color': colors['text']
+    #     }),
+    #     #
+    #     # dcc.Graph(
+    #     #     id='Fueling Histogram',
+    #     #     figure=fig1
+    #     # ),
+        dcc.Graph(
+            id='fueling-timeline',
+            figure=fig2
+        ),
+        #     dcc.Graph(
+        #     id='entropy-timeline',
+        #     figure=fig6
         # ),
         dcc.Graph(
-            id='Fueling Timeline',
-            figure=fig2
-        ),dcc.Graph(
-            id='Entropy Timeline',
-            figure=fig6
-        ),dcc.Graph(
-            id='Fueling Count Timeline',
+            id='fueling-count-timeline',
             figure=fig8
         ),dcc.Graph(
-            id='Area Stats Timeline',
+            id='area-stats-timeline',
             figure=fig7
         # ),
 
@@ -501,15 +669,103 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         #     id='Fuel History',
         #     figure=fig3
         ), dcc.Graph(
-            id='Average Idle Time Histogram (Seconds)',
+            id='idle-time-histogram',
             figure=fig4
         ),
         dcc.Graph(
-            id='Latency Averages',
+            id='latency-average-timeline',
             figure=fig5
         )
-
+    #
     ])
+
+    @callback(Output('tbl_out', 'children'), Input('tbl', 'active_cell'))
+    def update_graphs(active_cell):
+        return str(active_cell) if active_cell else "Click the table"
+    @callback(Output('fueling-timeline', 'figure'), Input('tbl', 'active_cell'))
+    def update_graphs(active_cell):
+        active_col_id = active_cell['column_id'] if active_cell else None
+        active_row_id = active_cell['row']+1 if active_cell else None
+        fig= go.Figure()
+        if active_cell:
+            runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
+            syncTime=findTimeVehiclesStabilized(runDirectory)
+            fig=generateFuelLineGraph(runDirectory,syncTime)
+
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+    @callback(Output('idle-time-histogram', 'figure'), Input('tbl', 'active_cell'))
+    def update_graphs(active_cell):
+        active_col_id = active_cell['column_id'] if active_cell else None
+        active_row_id = active_cell['row']+1 if active_cell else None
+        fig= go.Figure()
+        if active_cell:
+            runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
+            syncTime=findTimeVehiclesStabilized(runDirectory)
+
+            fig = generateIdleTimeHistogram(runDirectory,syncTime)
+
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+    @callback(Output('latency-average-timeline', 'figure'), Input('tbl', 'active_cell'))
+    def update_graphs(active_cell):
+        active_col_id = active_cell['column_id'] if active_cell else None
+        active_row_id = active_cell['row']+1 if active_cell else None
+        fig= go.Figure()
+        if active_cell:
+            runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
+            syncTime=findTimeVehiclesStabilized(runDirectory)
+
+            fig = generateLatencyAverageLineGraph(runDirectory,syncTime)
+
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+    @callback(Output('area-stats-timeline', 'figure'), Input('tbl', 'active_cell'))
+    def update_graphs(active_cell):
+        active_col_id = active_cell['column_id'] if active_cell else None
+        active_row_id = active_cell['row']+1 if active_cell else None
+        fig= go.Figure()
+        if active_cell:
+            runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
+            syncTime=findTimeVehiclesStabilized(runDirectory)
+
+            fig = generateAreaStatsLineGraph(runDirectory,syncTime)
+
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+    @callback(Output('fueling-count-timeline', 'figure'), Input('tbl', 'active_cell'))
+    def update_graphs(active_cell):
+        active_col_id = active_cell['column_id'] if active_cell else None
+        active_row_id = active_cell['row']+1 if active_cell else None
+        fig= go.Figure()
+        if active_cell:
+            runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
+            syncTime=findTimeVehiclesStabilized(runDirectory)
+
+            fig = generateVehicleFuelingCountLineGraph(runDirectory,syncTime)
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+
     app.run_server(debug=True)
 
 
@@ -554,58 +810,6 @@ if __name__ == '__main__':
     generateDashboard(args.depot, args.vehicle)
     # processLatencyCounts(args.depot)
 
-# def generateFuelTimeHistogram(directory):
 
-
-# fig1 = generateFuelTimeHistogram()
-# fig2= read_list("/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/LOG_DEPOT_ONE_3_10_2022_____19_56_21/LOG_DEPOT_ONE_3_10_2022_____19_56_21.alog","/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/LOG_DEPOT_TWO_3_10_2022_____19_56_21/LOG_DEPOT_TWO_3_10_2022_____19_56_21.alog")
-# fig3=generateFuelLineGraph()
-# app=Dash(__name__)
-# colors = {
-#     'background': '#111111',
-#     'text': '#7FDBFF'
-# }
-# fig2.update_layout(
-#     plot_bgcolor=colors['background'],
-#     paper_bgcolor=colors['background'],
-#     font_color=colors['text']
-# )
-# fig1.update_layout(
-#     plot_bgcolor=colors['background'],
-#     paper_bgcolor=colors['background'],
-#     font_color=colors['text']
-# )
-# fig3.update_layout(
-#     plot_bgcolor=colors['background'],
-#     paper_bgcolor=colors['background'],
-#     font_color=colors['text']
-# )
-# app.layout = html.Div(style={'backgroundColor': colors['background']},children=[
-#     html.H1(children='Ship Supply Dashboard Visualization Tool',style={
-#         'textAlign': 'center',
-#         'color': colors['text']
-#     }),
-#
-#     html.Div(children='''
-#         Run: 10/5/22 at 2100
-#     ''',style={
-#     'textAlign': 'center',
-#     'color': colors['text']
-# }),
-#
-#     dcc.Graph(
-#         id='Fueling Histogram',
-#         figure=fig1
-#     ),
-#     dcc.Graph(
-#         id='Fueling Timeline',
-#         figure=fig2
-#     ),dcc.Graph(
-#         id='Fuel History',
-#         figure=fig3
-#     )
-#
-# ])
-# app.run_server(debug=True)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
