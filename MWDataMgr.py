@@ -1220,6 +1220,7 @@ if __name__ == "__main__":
             data = mwDataMgr.get_alog(source, include_only=include_only, exclude=exclude, use_strategies=True)
             if args.vehicle:
                 fuelTimeLog=mwDataMgr.processFuelTimeLog(data)
+                #print("{bcolors.FAIL}Error{bcolors.ENDC}: Processed fuel time log")
                 #fuelWaitTimeLog=mwDataMgr.processFuelWaitLog(data)
                 #latencyAverageLog=mwDataMgr.processLatencyAverageLog(data,"vehicle")
             if args.shore:
@@ -1276,7 +1277,8 @@ if __name__ == "__main__":
                 output_path=output_directory + data["info"]["alias"]+"_fuelTime"
                 with open(output_path, 'wb') as pickle_file:
                     pickle.dump(fuelTimeLog,pickle_file)
-                output_path = output_directory + data["info"]["alias"]+"_wait"
+                #print(f"\t> Output Path: {bcolors.OKBLUE}- < {output_path} >{bcolors.OKBLUE}")
+                #output_path = output_directory + data["info"]["alias"]+"_wait"
                 # with open(output_path, 'wb') as pickle_file:
                 #     pickle.dump(fuelWaitTimeLog,pickle_file)
                 # output_path = output_directory + data["info"]["alias"] + "_averageLatency"

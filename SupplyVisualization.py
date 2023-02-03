@@ -466,8 +466,9 @@ def generateAverageIdleTimeDataFrame(directory):
             depotNum=run.split("-")[0].split("_")[1]
             tankSize=run.split("-")[1].split("_")[1]
             #add the tank size and depot number to the sets
-            tankSizes.add(tankSize)
-            depotNumbers.add(depotNum)
+
+            tankSizes.add(int(tankSize))
+            depotNumbers.add(int(depotNum))
     #sort the tank sizes and depot numbers
     tankSizes=sorted(tankSizes)
     depotNumbers=sorted(depotNumbers)
@@ -492,10 +493,12 @@ def generateAverageAreaDataFrame(directory):
         if "tank_" in run:
             #split the run name using "-" as the delimiter into number of depots and tank size
             depotNum=run.split("-")[0].split("_")[1]
+
             tankSize=run.split("-")[1].split("_")[1]
+
             #add the tank size and depot number to the sets
-            tankSizes.add(tankSize)
-            depotNumbers.add(depotNum)
+            tankSizes.add(int(tankSize))
+            depotNumbers.add(int(depotNum))
     #sort the tank sizes and depot numbers
     tankSizes=sorted(tankSizes)
     depotNumbers=sorted(depotNumbers)
@@ -510,6 +513,16 @@ def generateAverageAreaDataFrame(directory):
             syncTime=findTimeVehiclesStabilized(runDirectory)
             df[tankSize][depotNum]= round(computeAreaAverage(runDirectory, syncTime),2)
     return df
+
+
+def generateDepotLatencySummaryFigure(idleSummaryDF):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[250], mode='lines', name="250"))
+    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[500], mode='lines', name="500"))
+    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[750], mode='lines', name="750"))
+    return fig
+
+    # generateAverageIdleTimeDataFrame
 def generateSummaryDataFrame(directory):
     #create a set of all tank sizes
     tankSizes = set()
@@ -520,10 +533,12 @@ def generateSummaryDataFrame(directory):
         if "tank_" in run:
             #split the run name using "-" as the delimiter into number of depots and tank size
             depotNum=run.split("-")[0].split("_")[1]
+
             tankSize=run.split("-")[1].split("_")[1]
+
             #add the tank size and depot number to the sets
-            tankSizes.add(tankSize)
-            depotNumbers.add(depotNum)
+            tankSizes.add(int(tankSize))
+            depotNumbers.add(int(depotNum))
     #sort the tank sizes and depot numbers
     tankSizes=sorted(tankSizes)
     depotNumbers=sorted(depotNumbers)
@@ -554,7 +569,7 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     #syncTime=generateSyncTime(depotDirectory)
 
     df=generateSummaryDataFrame(vehicleDirectory)
-
+    fig3=generateDepotLatencySummaryFigure(generateAverageIdleTimeDataFrame(vehicleDirectory))
     app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
     colors = {
       'background': '#111111',
@@ -602,11 +617,11 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     # #     paper_bgcolor=colors['background'],
     # #     font_color=colors['text']
     # # )
-    # # fig3.update_layout(
-    # #     plot_bgcolor=colors['background'],
-    # #     paper_bgcolor=colors['background'],
-    # #     font_color=colors['text']
-    # # )
+    fig3.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
     # fig4.update_layout(
     #     plot_bgcolor=colors['background'],
     #     paper_bgcolor=colors['background'],
@@ -626,7 +641,7 @@ def generateDashboard(depotDirectory, vehicleDirectory):
             'textAlign': 'center',
             'color': colors['text']
         }),
-    dash_table.DataTable(df.to_dict('records'),[{"name": i, "id": i} for i in df.columns], id='tbl',style_data={
+    dash_table.DataTable(df.to_dict('records'),[{"name": str(i), "id": str(i)} for i in df.columns], id='tbl',style_data={
         'backgroundColor': colors['background'],
         'color': colors['text']
     },style_header={
@@ -659,15 +674,11 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         dcc.Graph(
             id='fueling-count-timeline',
             figure=fig8
-        ),dcc.Graph(
+        ), dcc.Graph(
             id='area-stats-timeline',
             figure=fig7
-        # ),
 
-        # , d
-        # cc.Graph(
-        #     id='Fuel History',
-        #     figure=fig3
+
         ), dcc.Graph(
             id='idle-time-histogram',
             figure=fig4
@@ -675,8 +686,12 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         dcc.Graph(
             id='latency-average-timeline',
             figure=fig5
+        ),
+        dcc.Graph(
+            id='depot-latency-graph',
+            figure=fig3
         )
-    #
+        #
     ])
 
     @callback(Output('tbl_out', 'children'), Input('tbl', 'active_cell'))
@@ -765,6 +780,7 @@ def generateDashboard(depotDirectory, vehicleDirectory):
                 font_color=colors['text']
             )
         return fig
+
 
     app.run_server(debug=True)
 
