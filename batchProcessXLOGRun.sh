@@ -27,9 +27,10 @@ do
   NUM_DEPOTS="${ADDR[1]}"
   #get the tank size from the folder name
   TANK_SIZE="${ADDR[5]}"
-
+  #get the number of ships from the folder name
+  NUM_SHIPS="${ADDR[3]}"
 #XLOGS are way slower than the LOGS, so we will process them first in parallel to maximize the speed of the script
-  UNIQUE_OUTPUT_DIRECTORY="$OUTPUT_DIRECTORY/depots_$NUM_DEPOTS-tank_$TANK_SIZE"
+  UNIQUE_OUTPUT_DIRECTORY="$OUTPUT_DIRECTORY/depots_$NUM_DEPOTS-tank_$TANK_SIZE-ships_$NUM_SHIPS"
   echo "Output directory: $UNIQUE_OUTPUT_DIRECTORY"
   for entry in "$folder"/XLOG*/*.alog
   do
@@ -50,9 +51,10 @@ do
   NUM_DEPOTS="${ADDR[1]}"
   #get the tank size from the folder name
   TANK_SIZE="${ADDR[5]}"
-
+  #get the number of ships from the folder name
+  NUM_SHIPS="${ADDR[3]}"
   #create an output directory string with the number of depots and tank size in it
-  UNIQUE_OUTPUT_DIRECTORY="$OUTPUT_DIRECTORY/depots_$NUM_DEPOTS-tank_$TANK_SIZE"
+  UNIQUE_OUTPUT_DIRECTORY="$OUTPUT_DIRECTORY/depots_$NUM_DEPOTS-tank_$TANK_SIZE-ships_$NUM_SHIPS"
   echo "Output directory: $UNIQUE_OUTPUT_DIRECTORY"
 
   for entry in "$folder"/LOG*/*.alog

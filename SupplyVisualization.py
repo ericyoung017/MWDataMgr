@@ -11,218 +11,32 @@ import plotly.graph_objects as go
 import pandas as pd
 import os
 import numpy as np
-from dash import Dash, html, dcc,Input, Output, callback, dash_table
+from dash import Dash, html, dcc, Input, Output, callback, dash_table, State
+import dash
 import dash_bootstrap_components as dbc
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import datetime
 from scipy import signal
+import plotly.figure_factory as ff
+from multiprocessing.pool import ThreadPool
+import concurrent.futures
+import multiprocessing
+import pickle
+import pyarrow
 
 
-def test():
-    df = pd.DataFrame([{'row': 'A',
-                        'start_time': '2020-08-04 06:00:01',
-                        'end_time': '2020-08-04 06:06:01',
-                        'status': 'succeeded'},
-                       {'row': 'A',
-                        'start_time': '2020-08-04 07:00:01',
-                        'end_time': '2020-08-04 07:05:01',
-                        'status': 'failed'},
-                       {'row': 'A',
-                        'start_time': '2020-08-04 08:00:01',
-                        'end_time': '2020-08-04 08:06:01',
-                        'status': 'succeeded'},
-                       {'row': 'B',
-                        'start_time': '2020-08-04 06:44:11',
-                        'end_time': '2020-08-04 06:53:22',
-                        'status': 'succeeded'},
-                       {'row': 'B',
-                        'start_time': '2020-08-04 07:01:58',
-                        'end_time': '2020-08-04 07:07:48',
-                        'status': 'succeeded'},
-                       {'row': 'C',
-                        'start_time': '2020-08-04 06:38:56',
-                        'end_time': '2020-08-04 06:44:59',
-                        'status': 'succeeded'},
-                       {'row': 'C',
-                        'start_time': '2020-08-04 06:59:00',
-                        'end_time': '2020-08-04 07:05:00',
-                        'status': 'failed'}])
-    print(df)
-    fig = px.timeline(df, x_start="start_time", x_end="end_time", y="row", color="status")
-    fig.show()
 
-
-def read_list(name, name2):
-    # READ IN ALL OF DEPOT ONE's INFO
-    list = []
-    f = open(name)
-    line = f.readline()
-    line = f.readline()
-    line = f.readline()
-    line = f.readline()
-    line = f.readline()
-    line = f.readline()
-    while line:
-        try:
-            list.append(line)
-        except ValueError:
-            print('Error in line :' + line)
-        line = f.readline()
-    df = pd.DataFrame([sub.split() for sub in list])
-    logFrame = pd.DataFrame([sub.split("-") for sub in df[3]])
-    df2 = logFrame[pd.to_numeric(logFrame[2], errors='coerce').notnull()]
-    df2.columns = ['id', 'vehicle', 'start', 'end', 'ACTIVITY']
-    df3 = df2.copy()
-    df3['start'] = df2['start'].astype(float)
-    df3['end'] = df2['end'].astype(float)
-    # ---------
-
-    # READ IN ALL OF DEPOT 2's info
-    list = []
-    f = open(name2)
-    line = f.readline()
-    line = f.readline()
-    line = f.readline()
-    line = f.readline()
-    line = f.readline()
-    line = f.readline()
-    while line:
-        try:
-            list.append(line)
-        except ValueError:
-            print('Error in line :' + line)
-        line = f.readline()
-    df = pd.DataFrame([sub.split() for sub in list])
-    logFrame = pd.DataFrame([sub.split("-") for sub in df[3]])
-    df2 = logFrame[pd.to_numeric(logFrame[2], errors='coerce').notnull()]
-    df2.columns = ['id', 'vehicle', 'start', 'end', 'ACTIVITY']
-    df4 = df2.copy()
-    df4['start'] = df2['start'].astype(float)
-    df4['end'] = df2['end'].astype(float)
-    # ----------------------
-    # print(df3)
-    # print(df4)
-    deltaFrame = pd.concat([df3, df4])
-    # SUBTRACT THE EARLIEST MOOSTIME ENTRY TO MAKE EVERYTHING REFERENCED FROM ZERO
-    deltaFrame['start1'] = deltaFrame['start'] - 33296827658
-    deltaFrame['end1'] = deltaFrame['end'] - 33296827658
-
-    # TRIM AND RESET INDEX OF CONCATENATED LIST
-    nf = deltaFrame[['vehicle', 'start1', 'end1', 'ACTIVITY']].copy()
-    nf.reset_index(drop=True, inplace=True)
-    # Convert our start and end times to datetimes so that they can be correctly read by plotly
-    nf['end1'] = pd.to_datetime(nf['end1'], unit='s')
-    nf['start1'] = pd.to_datetime(nf['start1'], unit='s')
-    fig = px.timeline(
-        nf, x_start="start1", x_end="end1", y="vehicle",
-
-        color='ACTIVITY'
-
-    )
-    # fig.show()
-    return fig
-
-
-# def generateFuelTimeHistogram():
-#     directory="/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/testLogFolder"
-#     logLines = []
-#     for filename in os.listdir(directory):
-#         name = os.path.join(directory, filename)
-#
-#         # checking if it is a file
-#         if not filename.startswith('.') and os.path.isfile(name):
-#             #chomp the first header lines of the log file
-#             f = open(name)
-#             line = f.readline()
-#             line = f.readline()
-#             line = f.readline()
-#             line = f.readline()
-#             line = f.readline()
-#             while line:
-#                 try:
-#                     line=f.readline()
-#                     #print(line)
-#                     logLines.append(line)
-#                 except ValueError:
-#                     print('Error in line :' + line)
-#     rawLogData = pd.DataFrame([sub.split() for sub in logLines])
-#     #print(rawLogData[3])
-#     splitWaitLogs=rawLogData[3].str.split(pat='-',expand =True)
-#     finalWaitTimes=splitWaitLogs[pd.to_numeric(splitWaitLogs[1], errors='coerce').notnull()]
-#     finalWaitTimes.columns=['vehicle','time']
-#     finalWaitTimes['time']=finalWaitTimes['time'].astype(float)
-#     finalWaitTimes.sort_values(by=['time'],ascending=True)
-#     fig = px.histogram(finalWaitTimes, x="time")
-#     return fig
-#     #fig.show()
-#     #print(splitWaitLogs[1])
-#     #print(finalWaitTimes)
-#     #df2 = rawLogData[pd.to_numeric(rawLogData[3], errors='coerce').notnull()]
-
-def generateFuelLineGraph():
-    directory = "/Users/ericyoung/moos-ivp-younge/missions/ufld_saxis/testLogFolder2"
-    vehicleFrames = []
-    logLines = []
-    fig = go.Figure()
-    for filename in os.listdir(directory):
-        name = os.path.join(directory, filename)
-
-        # checking if it is a file
-        if not filename.startswith('.') and os.path.isfile(name):
-            # print(filename)
-            f = open(name)
-            line = f.readline()
-            line = f.readline()
-            line = f.readline()
-            line = f.readline()
-            line = f.readline()
-            while line:
-                try:
-                    line = f.readline()
-                    # print(line)
-                    logLines.append(line)
-                except ValueError:
-                    print('Error in line :' + line)
-            # create a list of dataframes that hold the "-" separated fuel log data for every vehicle
-            vehicleFrames.append(pd.DataFrame([sub.split() for sub in logLines])[3])
-            logLines = []
-    # split the fuel log data by "-"
-    tempProcessedFuelData = []
-    for frame in vehicleFrames:
-        tempProcessedFuelData.append(frame.str.split(pat='-', expand=True))
-    # remove None rows from the fuel data
-    dashSegmentedFuelData = []
-    for frame in tempProcessedFuelData:
-        dashSegmentedFuelData.append(frame.replace(to_replace='None', value=np.nan).dropna())
-    finalSegmentedFuelData = []
-    fig = go.Figure()
-    for frame in dashSegmentedFuelData:
-        # convert fuel and time values to numbers
-        frame[1] = frame[1].astype(float)
-        frame[2] = frame[2].astype(float)
-        # name each column in the dataframe
-        frame.columns = ['vehicle', 'level', 'time']
-        # remove all starting values with values greater than the fuel tank size (this is for testing only)
-        tempData = frame[(frame['level'] <= 200)]
-        # reset the dataframe index to make up for the values just removed
-        tempData.reset_index(inplace=True)
-        # zero out the time data based on the earliest value and convert to a datetime object
-
-        tempData['time'] = tempData['time'] - tempData['time'][0]
-        tempData['time'] = pd.to_datetime(tempData['time'], unit='s')
-        finalSegmentedFuelData.append(tempData)
-        fig.add_trace(go.Scatter(x=tempData['time'], y=tempData['level'],
-                                 mode='lines',
-                                 name=tempData['vehicle'][0]))
-    return fig
-    # fig.show()
-    # print(finalSegmentedFuelData[0])
-    # print((dashSegmentedFuelData[0]['level']<=200))
-
-    # print(dashSegmentedFuelData[0][(dashSegmentedFuelData[0]['level']<=200)])
-
-
+def load_numpickle(fpath):
+    df = pd.DataFrame(np.load(fpath, allow_pickle=True))
+    with open(fpath, "rb") as fin:
+        meta = pickle.load(fin)
+    # if no ‘types’ present, assuming all_numeric
+    df.index, df.columns, dtypes = \
+        meta['rownames'], meta['colnames'], meta.get('dtypes', None)
+    if dtypes is not None:
+        df = df.astype(dtypes)
+    return df
 def generateDepotTimelines(directory) -> object:
     depotData = pd.DataFrame(columns=["dname", 'status', 'st', "et"])
 
@@ -251,28 +65,55 @@ def generateDepotTimelines(directory) -> object:
 # create a function that will generate a line graph of the fuel levels of all vehicles
 def generateFuelLineGraph(directory,syncTime):
     vehicleFrames = []
+    runDirectories = []
+    returnThreadResults = []
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
         # checking if it is a file
         if os.path.isfile(f):
             if "DEPOT" not in filename and "SHORESIDE" not in filename and "fuelTime" in filename:
-                # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
-                vehicleFrame = pd.read_pickle(f)
-                #syncTimes with all other moos logs
-                vehicleFrame = vehicleFrame.loc[vehicleFrame['time'] > syncTime]
-                #reset index
-                vehicleFrame.reset_index(inplace=True)
-                # subtract the earliest time from the time column
-                vehicleFrame['time'] = vehicleFrame['time'] - vehicleFrame['time'].min()
-                # convert the time column to a datetime object
-                vehicleFrame['time'] = pd.to_datetime(vehicleFrame['time'], unit='s')
-                vehicleFrames.append(vehicleFrame)
+                # # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+                # vehicleFrame = pd.read_pickle(f)
+                # #syncTimes with all other moos logs
+                # vehicleFrame = vehicleFrame.loc[vehicleFrame['time'] > syncTime]
+                # #reset index
+                # vehicleFrame.reset_index(inplace=True)
+                # # subtract the earliest time from the time column
+                # vehicleFrame['time'] = vehicleFrame['time'] - vehicleFrame['time'].min()
+                # #temporary catch to elminate spurios data logged after we quit the experiement
+                # vehicleFrame = vehicleFrame[(vehicleFrame['time'] < 85200)]
+                # # convert the time column to a datetime object
+                # vehicleFrame['time'] = pd.to_datetime(vehicleFrame['time'], unit='s')
+                runDirectories.append(f)
+
+                #vehicleFrames.append(vehicleFrame)
+# using 6 processes to run the helper function, run fuel line graph helper in parallel over all the runDirectories using syncTime. Append the results as they arrive to the vehicle dataframe
+    with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
+        results = [executor.submit(fuelLineGraphHelper, f, syncTime) for f in runDirectories]
+        for f in concurrent.futures.as_completed(results):
+            vehicleFrames.append(f.result())
         # create a scatter plot of the fuel levels of all vehicles
     fig = go.Figure()
     for frame in vehicleFrames:
         fig.add_trace(go.Scatter(x=frame['time'], y=frame['level'], mode='lines', name=frame['vname'][0]))
     return fig
-
+def fuelLineGraphHelper(f,syncTime):
+    # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+    vehicleFrame = pd.read_pickle(f)
+    # syncTimes with all other moos logs
+    vehicleFrame = vehicleFrame.loc[vehicleFrame['time'] > syncTime]
+    # reset index
+    vehicleFrame.reset_index(inplace=True)
+    # subtract the earliest time from the time column
+    vehicleFrame['time'] = vehicleFrame['time'] - vehicleFrame['time'].min()
+    # # temporary catch to elminate spurios data logged after we quit the experiement
+    # vehicleFrame = vehicleFrame[(vehicleFrame['time'] < 85200)]
+    # convert the time column to a datetime object
+    vehicleFrame['time'] = pd.to_datetime(vehicleFrame['time'], unit='s')
+    #vehicleFrame.set_index('time', inplace=True)
+    #convert dataframe to 1 minuute frequency
+    vehicleFrame= vehicleFrame.asfreq('1Min')
+    return vehicleFrame
 # create a function that will generate a line graph of the fuel levels of all vehicles
 def generateEntropyLineGraph(directory,syncTime):
     entropyFrames = []
@@ -403,12 +244,17 @@ def generateVehicleFuelingCountLineGraph(directory,syncTime):
                 frame = pd.read_pickle(f)
                 #syncTimes with all other moos logs
                 frame = frame.loc[frame['time'] > syncTime]
+                #eliminate all entries from frame whose count is less than zero
+
 
                 # subtract the earliest time from the time column
                 frame['time'] = frame['time'] - frame['time'].min()
                 # convert the time column to a datetime object
+
                 frame['time'] = pd.to_datetime(frame['time'], unit='s')
+
                 frame.append(frame)
+
         # create a scatter plot of the count of all vehicles currently fueling
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=frame['time'], y=frame['count'], mode='lines', name="Number of Vehicles Fueling"))
@@ -454,7 +300,7 @@ def generateSyncTime(directory):
                 minTimes.append(frame['time'].min())
     return max(minTimes)
 
-def generateAverageIdleTimeDataFrame(directory):
+def generateAverageIdleTimeDataFrame(directory,shipNum):
     #create a set of all tank sizes
     tankSizes = set()
     #create a set of all depot numbers
@@ -479,11 +325,12 @@ def generateAverageIdleTimeDataFrame(directory):
     #iterate through the tank sizes and depot numbers in the dataframe and set the value to a random number between zero and 1
     for tankSize in tankSizes:
         for depotNum in depotNumbers:
-            runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize))
+            runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize)+"-ships_"+str(shipNum))
             syncTime=findTimeVehiclesStabilized(runDirectory)
             df[tankSize][depotNum]= round(computeShoresideLatencyAverage(runDirectory, syncTime),2)
     return df
-def generateAverageAreaDataFrame(directory):
+
+def generateAverageAreaDataFrame(directory,shipNum):
     #create a set of all tank sizes
     tankSizes = set()
     #create a set of all depot numbers
@@ -509,7 +356,7 @@ def generateAverageAreaDataFrame(directory):
     #iterate through the tank sizes and depot numbers in the dataframe and set the value to a random number between zero and 1
     for tankSize in tankSizes:
         for depotNum in depotNumbers:
-            runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize))
+            runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize)+"-ships_"+str(shipNum))
             syncTime=findTimeVehiclesStabilized(runDirectory)
             df[tankSize][depotNum]= round(computeAreaAverage(runDirectory, syncTime),2)
     return df
@@ -522,8 +369,29 @@ def generateDepotLatencySummaryFigure(idleSummaryDF):
     fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[750], mode='lines', name="750"))
     return fig
 
+def generateAverageAreaSummaryFigure(areaSummaryDF):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[250], mode='lines', name="250"))
+    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[500], mode='lines', name="500"))
+    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[750], mode='lines', name="750"))
+    return fig
+def generateAverageAreaSummaryFigureMap(directory, shipNumbers):
+    #iterate through the ship numbers and generate a dataframe for each ship number make a figure for each ship number from the dataframe and add it to a figure map
+    figMap = {}
+    for shipNum in shipNumbers:
+        areaSummaryDF = generateAverageAreaDataFrame(directory,shipNum)
+        fig = generateAverageAreaSummaryFigure(areaSummaryDF)
+        figMap[shipNum] = fig
+    return figMap
+def generateDepotLatencySummaryFigureMap(directory, shipNumbers):
+    #iterate through the ship numbers and generate a dataframe for each ship number make a figure for each ship number from the dataframe and add it to a figure map
+    figMap = {}
+    for shipNum in shipNumbers:
+        idleSummaryDF = generateAverageIdleTimeDataFrame(directory,shipNum)
+        fig = generateDepotLatencySummaryFigure(idleSummaryDF)
+        figMap[shipNum] = fig
     # generateAverageIdleTimeDataFrame
-def generateSummaryDataFrame(directory):
+def generateSummaryDataFrame(directory,shipNumber):
     #create a set of all tank sizes
     tankSizes = set()
     #create a set of all depot numbers
@@ -546,15 +414,309 @@ def generateSummaryDataFrame(directory):
     df = pd.DataFrame(index=depotNumbers, columns=tankSizes)
     #create column in the dataframe for the number of depots
     df.insert(0, "Number of Depots", depotNumbers)
-    areaDF=generateAverageAreaDataFrame(directory)
-    idleDF=generateAverageIdleTimeDataFrame(directory)
+    areaDF=generateAverageAreaDataFrame(directory,shipNumber)
+    idleDF=generateAverageIdleTimeDataFrame(directory,shipNumber)
     #iterate through the tank sizes and depot numbers in the dataframe and set the to the string concatination of the other area and idle time dataframes
     for tankSize in tankSizes:
         for depotNum in depotNumbers:
-            runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize))
-            syncTime=findTimeVehiclesStabilized(runDirectory)
+            # runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize))
+            # syncTime=findTimeVehiclesStabilized(runDirectory)
             df[tankSize][depotNum]= str(areaDF[tankSize][depotNum]) + " / " + str(idleDF[tankSize][depotNum])
     return df
+def getShipQuantityInformationDF(directory):
+    #iterate through the folders in the directory, for each folder, split the folder name by "_" and assign ships to the third element
+    shipNumbers= set()
+    for folder in os.listdir(directory):
+        if "ships_" in folder:
+            shipNumbers.add(int(folder.split("_")[3]))
+    #sort the ship numbers
+    shipNumbers=sorted(shipNumbers)
+    #convert the set to a pandas dataframe with column name "Ship Number"
+    df=pd.DataFrame(shipNumbers, columns=["Ship Number"])
+    return df
+def getShipQuantityInformation(directory):
+    #iterate through the folders in the directory, for each folder, split the folder name by "_" and assign ships to the third element
+    shipNumbers= set()
+    for folder in os.listdir(directory):
+        if "ships_" in folder:
+            shipNumbers.add(int(folder.split("-")[2].split("_")[1]))
+    #sort the ship numbers
+    shipNumbers=sorted(shipNumbers)
+    #convert the ship numbers to a list
+    shipNumbers=list(shipNumbers)
+
+    return shipNumbers
+# def generateVariableShipButtons(directory):
+#     #get the ship numbers
+#     shipNumbers=getShipQuantityInformation(directory)
+#     #create a list of buttons
+#     buttons=[]
+#     #iterate through the ship numbers and create a button for each ship number
+#     for shipNumber in shipNumbers:
+#         buttons.append(html.Button(str(shipNumber), id="ship_"+str(shipNumber), n_clicks=0))
+#     buttons.append(html.Div(id='container-button-timestamp'))
+#     return buttons
+def generateFuelLineFigureMap(directory, shipNumbers):
+    # this function finds the number of unique depots and tank sizes in the directory
+    #the function then creates a double list of figures, one for each depot and tank size combination given a ship qty
+    #the function then assigns the double list of figures to a map with the key being the ship qty and the value being the double list of figures
+    #the function then returns the map
+    #create a set of all tank sizes
+    tankSizes = set()
+    #create a set of all depot numbers
+    depotNumbers = set()
+    #determine all the unique tank sizes and depot numbers
+    for run in os.listdir(directory):
+        if "tank_" in run:
+            #split the run name using "-" as the delimiter into number of depots and tank size
+            depotNum=run.split("-")[0].split("_")[1]
+
+            tankSize=run.split("-")[1].split("_")[1]
+
+            #add the tank size and depot number to the sets
+            tankSizes.add(int(tankSize))
+            depotNumbers.add(int(depotNum))
+    #sort the tank sizes and depot numbers
+    tankSizes=sorted(tankSizes)
+    depotNumbers=sorted(depotNumbers)
+    #create a map of ship quantities to double lists of figures
+    shipQtyMap={}
+    #iterate through the ship quantities
+    for shipQty in shipNumbers:
+        #create a list to hold the figures
+        figures=[]
+        #iterate through the depot numbers
+        for depotNum in depotNumbers:
+            #iterate through the tank sizes
+            tankList=[]
+            for tankSize in tankSizes:
+                print("depots_"+str(depotNum)+"-tank_"+str(tankSize)+ "-ships_"+str(shipQty))
+                #create the file directory for the fuel line graph for the given ship qty, depot number, and tank size
+                fileDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize)+ "-ships_"+str(shipQty))
+                #generate the vehicle stabilization time from the file directory
+                syncTime=findTimeVehiclesStabilized(fileDirectory)
+                #generate the fuel line figure from the file directory and vehicle stabilization time
+                fig=generateFuelLineGraph(fileDirectory, syncTime)
+                #add the figure to the list
+                tankList.append(fig)
+            #add the tank list to the figures list
+            figures.append(tankList)
+        #add the figures list to the map with the ship qty as the key
+        shipQtyMap[shipQty]=figures
+    return shipQtyMap
+def generateIdleTimeHistogramMap(directory, shipNumbers):
+    # this function finds the number of unique depots and tank sizes in the directory
+    #the function then creates a double list of figures, one for each depot and tank size combination given a ship qty
+    #the function then assigns the double list of figures to a map with the key being the ship qty and the value being the double list of figures
+    #the function then returns the map
+    #create a set of all tank sizes
+    tankSizes = set()
+    #create a set of all depot numbers
+    depotNumbers = set()
+    #determine all the unique tank sizes and depot numbers
+    for run in os.listdir(directory):
+        if "tank_" in run:
+            #split the run name using "-" as the delimiter into number of depots and tank size
+            depotNum=run.split("-")[0].split("_")[1]
+
+            tankSize=run.split("-")[1].split("_")[1]
+
+            #add the tank size and depot number to the sets
+            tankSizes.add(int(tankSize))
+            depotNumbers.add(int(depotNum))
+    #sort the tank sizes and depot numbers
+    tankSizes=sorted(tankSizes)
+    depotNumbers=sorted(depotNumbers)
+    #create a map of ship quantities to double lists of figures
+    shipQtyMap={}
+    #iterate through the ship quantities
+    for shipQty in shipNumbers:
+        #create a list to hold the figures
+        figures=[]
+        #iterate through the depot numbers
+        for depotNum in depotNumbers:
+            #iterate through the tank sizes
+            tankList=[]
+            for tankSize in tankSizes:
+                #create the file directory for the fuel line graph for the given ship qty, depot number, and tank size
+                fileDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize)+"-ships_"+str(shipQty))
+                #generate the vehicle stabilization time from the file directory
+                syncTime=findTimeVehiclesStabilized(fileDirectory)
+                #generate the fuel line figure from the file directory and vehicle stabilization time
+                fig=generateAnnotatedIdleTimeHistogram(fileDirectory, syncTime)
+                #add the figure to the list
+                tankList.append(fig)
+            #add the tank list to the figures list
+            figures.append(tankList)
+        #add the figures list to the map with the ship qty as the key
+        shipQtyMap[shipQty]=figures
+    return shipQtyMap
+def generateLatencyAverageMap(directory, shipNumbers):
+    # this function finds the number of unique depots and tank sizes in the directory
+    #the function then creates a double list of figures, one for each depot and tank size combination given a ship qty
+    #the function then assigns the double list of figures to a map with the key being the ship qty and the value being the double list of figures
+    #the function then returns the map
+    #create a set of all tank sizes
+    tankSizes = set()
+    #create a set of all depot numbers
+    depotNumbers = set()
+    #determine all the unique tank sizes and depot numbers
+    for run in os.listdir(directory):
+        if "tank_" in run:
+            #split the run name using "-" as the delimiter into number of depots and tank size
+            depotNum=run.split("-")[0].split("_")[1]
+
+            tankSize=run.split("-")[1].split("_")[1]
+
+            #add the tank size and depot number to the sets
+            tankSizes.add(int(tankSize))
+            depotNumbers.add(int(depotNum))
+    #sort the tank sizes and depot numbers
+    tankSizes=sorted(tankSizes)
+    depotNumbers=sorted(depotNumbers)
+    #create a map of ship quantities to double lists of figures
+    shipQtyMap={}
+    #iterate through the ship quantities
+    for shipQty in shipNumbers:
+        #create a list to hold the figures
+        figures=[]
+        #iterate through the depot numbers
+        for depotNum in depotNumbers:
+            #iterate through the tank sizes
+            tankList=[]
+            for tankSize in tankSizes:
+                #create the file directory for the fuel line graph for the given ship qty, depot number, and tank size
+                fileDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize)+ "-ships_"+str(shipQty))
+                #generate the vehicle stabilization time from the file directory
+                syncTime=findTimeVehiclesStabilized(fileDirectory)
+                #generate the fuel line figure from the file directory and vehicle stabilization time
+                fig=generateLatencyAverageLineGraph(fileDirectory, syncTime)
+                #add the figure to the list
+                tankList.append(fig)
+            #add the tank list to the figures list
+            figures.append(tankList)
+        #add the figures list to the map with the ship qty as the key
+        shipQtyMap[shipQty]=figures
+    return shipQtyMap
+def generateAreaStatsLineGraphMap(directory, shipNumbers):
+    # this function finds the number of unique depots and tank sizes in the directory
+    #the function then creates a double list of figures, one for each depot and tank size combination given a ship qty
+    #the function then assigns the double list of figures to a map with the key being the ship qty and the value being the double list of figures
+    #the function then returns the map
+    #create a set of all tank sizes
+    tankSizes = set()
+    #create a set of all depot numbers
+    depotNumbers = set()
+    #determine all the unique tank sizes and depot numbers
+    for run in os.listdir(directory):
+        if "tank_" in run:
+            #split the run name using "-" as the delimiter into number of depots and tank size
+            depotNum=run.split("-")[0].split("_")[1]
+
+            tankSize=run.split("-")[1].split("_")[1]
+
+            #add the tank size and depot number to the sets
+            tankSizes.add(int(tankSize))
+            depotNumbers.add(int(depotNum))
+    #sort the tank sizes and depot numbers
+    tankSizes=sorted(tankSizes)
+    depotNumbers=sorted(depotNumbers)
+    #create a map of ship quantities to double lists of figures
+    shipQtyMap={}
+    #iterate through the ship quantities
+    for shipQty in shipNumbers:
+        #create a list to hold the figures
+        figures=[]
+        #iterate through the depot numbers
+        for depotNum in depotNumbers:
+            #iterate through the tank sizes
+            tankList=[]
+            for tankSize in tankSizes:
+                #create the file directory for the fuel line graph for the given ship qty, depot number, and tank size
+                fileDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize)+ "-ships_"+str(shipQty))
+                #generate the vehicle stabilization time from the file directory
+                syncTime=findTimeVehiclesStabilized(fileDirectory)
+                #generate the fuel line figure from the file directory and vehicle stabilization time
+                fig=generateAreaStatsLineGraphMap(fileDirectory, syncTime)
+                #add the figure to the list
+                tankList.append(fig)
+            #add the tank list to the figures list
+            figures.append(tankList)
+        #add the figures list to the map with the ship qty as the key
+        shipQtyMap[shipQty]=figures
+    return shipQtyMap
+def generateFuelingCountLineGraphMap(directory, shipNumbers):
+    # this function finds the number of unique depots and tank sizes in the directory
+    #the function then creates a double list of figures, one for each depot and tank size combination given a ship qty
+    #the function then assigns the double list of figures to a map with the key being the ship qty and the value being the double list of figures
+    #the function then returns the map
+    #create a set of all tank sizes
+    tankSizes = set()
+    #create a set of all depot numbers
+    depotNumbers = set()
+    #determine all the unique tank sizes and depot numbers
+    for run in os.listdir(directory):
+        if "tank_" in run:
+            #split the run name using "-" as the delimiter into number of depots and tank size
+            depotNum=run.split("-")[0].split("_")[1]
+
+            tankSize=run.split("-")[1].split("_")[1]
+
+            #add the tank size and depot number to the sets
+            tankSizes.add(int(tankSize))
+            depotNumbers.add(int(depotNum))
+    #sort the tank sizes and depot numbers
+    tankSizes=sorted(tankSizes)
+    depotNumbers=sorted(depotNumbers)
+    #create a map of ship quantities to double lists of figures
+    shipQtyMap={}
+    #iterate through the ship quantities
+    for shipQty in shipNumbers:
+        #create a list to hold the figures
+        figures=[]
+        #iterate through the depot numbers
+        for depotNum in depotNumbers:
+            #iterate through the tank sizes
+            tankList=[]
+            for tankSize in tankSizes:
+                #create the file directory for the fuel line graph for the given ship qty, depot number, and tank size
+                fileDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize)+ "-ships_"+str(shipQty))
+                #generate the vehicle stabilization time from the file directory
+                syncTime=findTimeVehiclesStabilized(fileDirectory)
+                #generate the fuel line figure from the file directory and vehicle stabilization time
+                fig=generateVehicleFuelingCountLineGraph(fileDirectory, syncTime)
+                #add the figure to the list
+                tankList.append(fig)
+            #add the tank list to the figures list
+            figures.append(tankList)
+        #add the figures list to the map with the ship qty as the key
+        shipQtyMap[shipQty]=figures
+    return shipQtyMap
+
+def generateSummaryDataFrameMap(directory, shipNumbers):
+    #iterate through the ship quantities, calculate the summary data frame for each ship quantity, and add the data frame to the map
+    shipQtyMap={}
+    for shipQty in shipNumbers:
+        shipQtyMap[shipQty]=generateSummaryDataFrame(directory, shipQty)
+    return shipQtyMap
+def generateSummaryIdleTimeFigureMap(directory, shipNumbers):
+    #iterate through the ship quantities, calculate the summary idle time figure for each ship quantity, and add the figure to the map
+    shipQtyMap={}
+    for shipQty in shipNumbers:
+    #generate average idle time data frame
+        df=generateAverageIdleTimeDataFrame(directory, shipQty)
+        fig = generateAverageAreaSummaryFigure(df)
+        shipQtyMap[shipQty]=fig
+    return shipQtyMap
+def generateSummaryAreaFigureMap(directory, shipNumbers):
+    #iterate through the ship quantities, calculate the summary area figure for each ship quantity, and add the figure to the map
+    shipQtyMap={}
+    for shipQty in shipNumbers:
+    #generate average area data frame
+        df=generateAverageAreaDataFrame(directory, shipQty)
+        fig = generateAverageAreaSummaryFigure(df)
+        shipQtyMap[shipQty]=fig
+    return shipQtyMap
 def generateDashboard(depotDirectory, vehicleDirectory):
     # fig1=generateDepotTimelines(depotDirectory)
     #Generate default figures to be updated by the callback
@@ -565,11 +727,81 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     fig6= go.Figure()
     fig7= go.Figure()
     fig8= go.Figure()
-
+    fig9= go.Figure()
     #syncTime=generateSyncTime(depotDirectory)
+    shipQtyInfo=getShipQuantityInformation(depotDirectory)
+    #we want to originally set our ship quantity to the first ship quantity in the list
+    shipQty=shipQtyInfo[0]
+    shipQtyDF=getShipQuantityInformationDF(depotDirectory)
+    #generate the maps of figures for the given ship quantity
+    currentWorkingDirectory=os.getcwd()
+    featherDirectory=os.path.join(currentWorkingDirectory, "FeatherFiles")
+    shipQtyAreaMap=generateSummaryAreaFigureMap(vehicleDirectory, shipQtyInfo)
+    usedCacheFigures=True
+    if not usedCacheFigures:
+        with open(os.path.join(featherDirectory, "shipQtyAreaMap.pkl"), 'wb') as f:
+            pickle.dump(shipQtyAreaMap, f)
+        shipQtyIdleTimeMap=generateSummaryIdleTimeFigureMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipQtyIdleTimeMap.pkl"), 'wb') as f:
+            pickle.dump(shipQtyIdleTimeMap, f)
+        shipQtySummaryMap=generateSummaryDataFrameMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipQtySummaryMap.pkl"), 'wb') as f:
+            pickle.dump(shipQtySummaryMap, f)
+        shipQtyFuelLineMap=generateFuelLineFigureMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipQtyFuelLineMap.pkl"), 'wb') as f:
+            pickle.dump(shipQtyFuelLineMap, f)
+        shipQtyFuelCountMap=generateFuelingCountLineGraphMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipQtyFuelCountMap.pkl"), 'wb') as f:
+            pickle.dump(shipQtyFuelCountMap, f)
+    #write the summary figure maps
+        shipAreaSummaryFigureMap=generateSummaryAreaFigureMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipAreaSummaryFigureMap.pkl"), 'wb') as f:
+            pickle.dump(shipAreaSummaryFigureMap, f)
+        shipIdleTimeSummaryFigureMap=generateSummaryIdleTimeFigureMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipIdleTimeSummaryFigureMap.pkl"), 'wb') as f:
+            pickle.dump(shipIdleTimeSummaryFigureMap, f)
+        idleTimeHistogramMap=generateIdleTimeHistogramMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "idleTimeHistogramMap.pkl"), 'wb') as f:
+            pickle.dump(idleTimeHistogramMap, f)
+    else:
+        #read the maps from the pickle files
+        with open(os.path.join(featherDirectory, "shipQtyAreaMap.pkl"), 'rb') as f:
+            shipQtyAreaMap = pickle.load(f)
+        with open(os.path.join(featherDirectory, "shipQtyIdleTimeMap.pkl"), 'rb') as f:
+            shipQtyIdleTimeMap = pickle.load(f)
+        with open(os.path.join(featherDirectory, "shipQtySummaryMap.pkl"), 'rb') as f:
+            shipQtySummaryMap = pickle.load(f)
+        with open(os.path.join(featherDirectory, "shipQtyFuelLineMap.pkl"), 'rb') as f:
+            shipQtyFuelLineMap = pickle.load(f)
+        with open(os.path.join(featherDirectory, "shipQtyFuelCountMap.pkl"), 'rb') as f:
+            shipQtyFuelCountMap = pickle.load(f)
+        with open(os.path.join(featherDirectory, "shipAreaSummaryFigureMap.pkl"), 'rb') as f:
+            shipAreaSummaryFigureMap = pickle.load(f)
+        with open(os.path.join(featherDirectory, "shipIdleTimeSummaryFigureMap.pkl"), 'rb') as f:
+            shipIdleTimeSummaryFigureMap = pickle.load(f)
+        with open(os.path.join(featherDirectory, "idleTimeHistogramMap.pkl"), 'rb') as f:
+            idleTimeHistogramMap = pickle.load(f)
 
-    df=generateSummaryDataFrame(vehicleDirectory)
-    fig3=generateDepotLatencySummaryFigure(generateAverageIdleTimeDataFrame(vehicleDirectory))
+
+
+    # if(True):
+    #     #dump all maps to pickle files
+    #     with open(os.path.join(featherDirectory, "shipQtyAreaMap.pkl"), 'wb') as f:
+    #         pickle.dump(shipQtyAreaMap, f)
+    #     with open(os.path.join(featherDirectory, "shipQtyIdleTimeMap.pkl"), 'wb') as f:
+    #         pickle.dump(shipQtyIdleTimeMap, f)
+    #     with open(os.path.join(featherDirectory, "shipQtySummaryMap.pkl"), 'wb') as f:
+    #         pickle.dump(shipQtySummaryMap, f)
+    #     with open(os.path.join(featherDirectory, "shipQtyFuelLineMap.pkl"), 'wb') as f:
+    #         pickle.dump(shipQtyFuelLineMap, f)
+    #     with open(os.path.join(featherDirectory, "shipQtyFuelCountMap.pkl"), 'wb') as f:
+    #         pickle.dump(shipQtyFuelCountMap, f)
+
+
+
+    # df=generateSummaryDataFrame(vehicleDirectory, shipQty)
+    # fig3=generateDepotLatencySummaryFigure(generateAverageIdleTimeDataFrame(vehicleDirectory,shipQty))
+    # fig9=generateAverageAreaSummaryFigure(generateAverageAreaDataFrame(vehicleDirectory,shipQty))
     app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
     colors = {
       'background': '#111111',
@@ -612,11 +844,11 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     #     paper_bgcolor=colors['background'],
     #     font_color=colors['text']
     # )
-    # # fig1.update_layout(
-    # #     plot_bgcolor=colors['background'],
-    # #     paper_bgcolor=colors['background'],
-    # #     font_color=colors['text']
-    # # )
+    fig9.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
     fig3.update_layout(
         plot_bgcolor=colors['background'],
         paper_bgcolor=colors['background'],
@@ -633,6 +865,7 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     #     font_color=colors['text']
     # )
     app.layout = html.Div(style={'backgroundColor': colors['background']}, children=[
+
         html.H1(children='Ship Supply Dashboard Visualization Tool', style={
             'textAlign': 'center',
             'color': colors['text']
@@ -640,8 +873,14 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     dbc.Label('Click a cell in the table:', style={
             'textAlign': 'center',
             'color': colors['text']
-        }),
-    dash_table.DataTable(df.to_dict('records'),[{"name": str(i), "id": str(i)} for i in df.columns], id='tbl',style_data={
+        }), dash_table.DataTable(shipQtyDF.to_dict('records'),[{"name": str(i), "id": str(i)} for i in shipQtyDF.columns], id='stbl',style_data={
+        'backgroundColor': colors['background'],'textAlign': 'center',
+        'color': colors['text']
+    },style_header={
+        'backgroundColor': 'rgb(30, 30, 30)','textAlign': 'center',
+        'color': colors['text']
+    }),
+    dash_table.DataTable(shipQtySummaryMap[shipQty].to_dict('records'),[{"name": str(i), "id": str(i)} for i in shipQtySummaryMap[shipQty].columns], id='tbl',style_data={
         'backgroundColor': colors['background'],
         'color': colors['text']
     },style_header={
@@ -649,6 +888,8 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         'color': colors['text']
     }),
     dbc.Alert(id='tbl_out')
+            ,
+            dbc.Alert(id='stbl_out')
 
 ]),
     #
@@ -686,100 +927,131 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         dcc.Graph(
             id='latency-average-timeline',
             figure=fig5
+        ),dcc.Graph(
+            id='area-average-graph',
+            figure=fig9
         ),
         dcc.Graph(
             id='depot-latency-graph',
             figure=fig3
-        )
+        ),dcc.Store(id="shipQty", data=shipQty)
         #
     ])
 
+    # @callback(Output('tbl_out', 'children'), Input('tbl', 'active_cell'))
+    # def update_graphs(active_cell):
+    #     return str(active_cell) if active_cell else "Click the table"
+    # @callback(Output('fueling-timeline', 'figure'), Input('tbl', 'active_cell'))
+    # def update_graphs(active_cell):
+    #     active_col_id = active_cell['column_id'] if active_cell else None
+    #     active_row_id = active_cell['row']+1 if active_cell else None
+    #     fig= go.Figure()
+    #     if active_cell:
+    #         runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
+    #         syncTime=findTimeVehiclesStabilized(runDirectory)
+    #         fig=generateFuelLineGraph(runDirectory,syncTime)
+    #
+    #         fig.update_layout(
+    #             plot_bgcolor=colors['background'],
+    #             paper_bgcolor=colors['background'],
+    #             font_color=colors['text']
+    #         )
+    #     return fig
     @callback(Output('tbl_out', 'children'), Input('tbl', 'active_cell'))
     def update_graphs(active_cell):
-        return str(active_cell) if active_cell else "Click the table"
-    @callback(Output('fueling-timeline', 'figure'), Input('tbl', 'active_cell'))
+        return str(active_cell['row'])+"-"+str(active_cell['column']) if active_cell else "click the table"
+    @callback(Output('shipQty', 'data'), Input('stbl', 'active_cell'),Input('stbl', "derived_virtual_row_ids"))
+    def update_graphs(active_cell,derived_virtual_row_ids):
+        shipQty=shipQtyInfo[active_cell['row']] if active_cell else 5
+        return shipQty
+    @callback(Output('tbl', 'data'), Input('stbl', 'active_cell'))
     def update_graphs(active_cell):
-        active_col_id = active_cell['column_id'] if active_cell else None
-        active_row_id = active_cell['row']+1 if active_cell else None
+        shipQty=shipQtyInfo[active_cell['row']] if active_cell else 5
+
+        # return dash_table.DataTable(shipQtySummaryMap[shipQty].to_dict('records'),[{"name": str(i), "id": str(i)} for i in shipQtySummaryMap[shipQty].columns], id='tbl',style_data={
+
+    #     'backgroundColor': colors['background'],
+    #     'color': colors['text']
+    # })
+        return shipQtySummaryMap[shipQty].to_dict('records')
+    @callback(Output('fueling-timeline', 'figure'), Input('tbl', 'active_cell'),Input('shipQty', 'data'))
+    def update_graphs(active_cell,data):
+        active_col_id = active_cell['column']-1 if active_cell else None
+        active_row_id = active_cell['row'] if active_cell else None
+        shipQty=data
         fig= go.Figure()
         if active_cell:
-            runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
-            syncTime=findTimeVehiclesStabilized(runDirectory)
-            fig=generateFuelLineGraph(runDirectory,syncTime)
-
+            fig=shipQtyFuelLineMap[shipQty][active_row_id][active_col_id]
             fig.update_layout(
                 plot_bgcolor=colors['background'],
                 paper_bgcolor=colors['background'],
                 font_color=colors['text']
             )
         return fig
-    @callback(Output('idle-time-histogram', 'figure'), Input('tbl', 'active_cell'))
-    def update_graphs(active_cell):
-        active_col_id = active_cell['column_id'] if active_cell else None
-        active_row_id = active_cell['row']+1 if active_cell else None
-        fig= go.Figure()
+    @callback(Output('idle-time-histogram', 'figure'), Input('tbl', 'active_cell'),Input('shipQty', 'data'))
+    def update_graphs(active_cell,data):
+        active_col_id = active_cell['column'] - 1 if active_cell else None
+        active_row_id = active_cell['row'] if active_cell else None
+        shipQty = data
+        fig = go.Figure()
         if active_cell:
-            runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
-            syncTime=findTimeVehiclesStabilized(runDirectory)
-
-            fig = generateIdleTimeHistogram(runDirectory,syncTime)
-
+            fig = idleTimeHistogramMap[shipQty][active_row_id][active_col_id]
             fig.update_layout(
                 plot_bgcolor=colors['background'],
                 paper_bgcolor=colors['background'],
                 font_color=colors['text']
             )
         return fig
-    @callback(Output('latency-average-timeline', 'figure'), Input('tbl', 'active_cell'))
-    def update_graphs(active_cell):
-        active_col_id = active_cell['column_id'] if active_cell else None
-        active_row_id = active_cell['row']+1 if active_cell else None
-        fig= go.Figure()
-        if active_cell:
-            runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
-            syncTime=findTimeVehiclesStabilized(runDirectory)
-
-            fig = generateLatencyAverageLineGraph(runDirectory,syncTime)
-
-            fig.update_layout(
-                plot_bgcolor=colors['background'],
-                paper_bgcolor=colors['background'],
-                font_color=colors['text']
-            )
-        return fig
-    @callback(Output('area-stats-timeline', 'figure'), Input('tbl', 'active_cell'))
-    def update_graphs(active_cell):
-        active_col_id = active_cell['column_id'] if active_cell else None
-        active_row_id = active_cell['row']+1 if active_cell else None
-        fig= go.Figure()
-        if active_cell:
-            runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
-            syncTime=findTimeVehiclesStabilized(runDirectory)
-
-            fig = generateAreaStatsLineGraph(runDirectory,syncTime)
-
-            fig.update_layout(
-                plot_bgcolor=colors['background'],
-                paper_bgcolor=colors['background'],
-                font_color=colors['text']
-            )
-        return fig
-    @callback(Output('fueling-count-timeline', 'figure'), Input('tbl', 'active_cell'))
-    def update_graphs(active_cell):
-        active_col_id = active_cell['column_id'] if active_cell else None
-        active_row_id = active_cell['row']+1 if active_cell else None
-        fig= go.Figure()
-        if active_cell:
-            runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
-            syncTime=findTimeVehiclesStabilized(runDirectory)
-
-            fig = generateVehicleFuelingCountLineGraph(runDirectory,syncTime)
-            fig.update_layout(
-                plot_bgcolor=colors['background'],
-                paper_bgcolor=colors['background'],
-                font_color=colors['text']
-            )
-        return fig
+    # @callback(Output('latency-average-timeline', 'figure'), Input('tbl', 'active_cell'))
+    # def update_graphs(active_cell):
+    #     active_col_id = active_cell['column_id'] if active_cell else None
+    #     active_row_id = active_cell['row']+1 if active_cell else None
+    #     fig= go.Figure()
+    #     if active_cell:
+    #         runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
+    #         syncTime=findTimeVehiclesStabilized(runDirectory)
+    #
+    #         fig = generateLatencyAverageLineGraph(runDirectory,syncTime)
+    #
+    #         fig.update_layout(
+    #             plot_bgcolor=colors['background'],
+    #             paper_bgcolor=colors['background'],
+    #             font_color=colors['text']
+    #         )
+    #     return fig
+    # @callback(Output('area-stats-timeline', 'figure'), Input('tbl', 'active_cell'))
+    # def update_graphs(active_cell):
+    #     active_col_id = active_cell['column_id'] if active_cell else None
+    #     active_row_id = active_cell['row']+1 if active_cell else None
+    #     fig= go.Figure()
+    #     if active_cell:
+    #         runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
+    #         syncTime=findTimeVehiclesStabilized(runDirectory)
+    #
+    #         fig = generateAreaStatsLineGraph(runDirectory,syncTime)
+    #
+    #         fig.update_layout(
+    #             plot_bgcolor=colors['background'],
+    #             paper_bgcolor=colors['background'],
+    #             font_color=colors['text']
+    #         )
+    #     return fig
+    # @callback(Output('fueling-count-timeline', 'figure'), Input('tbl', 'active_cell'))
+    # def update_graphs(active_cell):
+    #     active_col_id = active_cell['column_id'] if active_cell else None
+    #     active_row_id = active_cell['row']+1 if active_cell else None
+    #     fig= go.Figure()
+    #     if active_cell:
+    #         runDirectory =  os.path.join(vehicleDirectory, "depots_"+str(active_row_id)+"-tank_"+str(active_col_id))
+    #         syncTime=findTimeVehiclesStabilized(runDirectory)
+    #
+    #         fig = generateVehicleFuelingCountLineGraph(runDirectory,syncTime)
+    #         fig.update_layout(
+    #             plot_bgcolor=colors['background'],
+    #             paper_bgcolor=colors['background'],
+    #             font_color=colors['text']
+    #         )
+    #     return fig
 
 
     app.run_server(debug=True)
@@ -809,7 +1081,32 @@ def generateIdleTimeHistogram(directory,syncTime):
     # create a histogram of the latency data
     fig = px.histogram(latencyData, x="average")
     return fig
+def generateAnnotatedIdleTimeHistogram(directory,syncTime):
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f) and "averageLatency" in filename:
+            # read in a pickle file and assign it to a dataframe called latencyData
+            latencyData = pd.read_pickle(f)
+            #remove all the data before the sync time
+            latencyData=latencyData.loc[latencyData['time'] > syncTime]
+    #create a distplot using the average column of the latencyData dataframe
+    fig = ff.create_distplot([latencyData['average']], ["average"])
 
+
+    #fig = ff.create_distplot(latencyData, "average")
+    mean = latencyData['average'].mean()
+    stdev_pluss = mean + latencyData['average'].std()
+    stdev_minus = mean + latencyData['average'].std() * -1
+
+    fig.add_shape(type="line", x0=mean, x1=mean, y0=0, y1=0.02, xref='x', yref='y',
+                  line=dict(color='orange', dash='dash'))
+    fig.add_shape(type="line", x0=stdev_pluss, x1=stdev_pluss, y0=0, y1=0.02, xref='x', yref='y',
+                  line=dict(color='red', dash='dash'))
+    fig.add_shape(type="line", x0=stdev_minus, x1=stdev_minus, y0=0, y1=0.02, xref='x', yref='y',
+                  line=dict(color='red', dash='dash'))
+
+    return fig
 if __name__ == '__main__':
     import sys
     import os
