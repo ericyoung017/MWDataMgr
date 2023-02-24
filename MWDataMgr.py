@@ -104,7 +104,8 @@ class MWDataMgr:
                                  "CSP_SIMPLE": self.csp_simple_msg,
                                  "CSP_NESTED": self.csp_nested_sequence_msg,
                                  "CSP_BOUNDS": self.csp_bounds_msg,
-                                 "BOOL": self.boolean_msg}
+                                 "BOOL": self.boolean_msg,
+                                 "CSP_POINT": self.csp_nested_point_sequence_msg}
 
         # Some standard MOOS topics and parsing algorithms
         self.moos_alog_strats = {"VIEW_ARROW": self.csp_simple_msg,
@@ -334,6 +335,63 @@ class MWDataMgr:
                 new_msg.update({varname: var})
             idx += 1
         return new_msg
+    def csp_nested_point_sequence_msg(self, msg):
+        """Converts
+        "
+                                                 points = 4003.423535,-2645.054619       ^                            ^
+        Args:
+            msg (str): Comma Separated string of Pairs, where a pair has a left and right hand side of an equals sign, but
+            a value in the pair may be another comma separated list which requires a more complex parsing scheme (in Python)
+            designed specifically for surface point helm updates
+
+        Returns:
+            Dict: Returns a dictionary for each variable and value pair found in the comma separated message
+        """
+        new_msg = dict()
+        points=msg.split("=")[1].split("|")
+        varname=msg.split("=")[0]
+        new_msg.update({varname: points})
+        return new_msg
+        #
+        # idx = 0
+        # cs_tokens = msg.split('|')
+        # while idx < len(cs_tokens):
+        #     # get the 'supposed' pair and then split into lhs and rhs
+        #     pair = cs_tokens[idx]
+        #     section = pair.split("=")
+        #     if len(section) != 2:
+        #         # bad message
+        #         idx += 1
+        #         continue
+        #     # if double quotes starts the sequence, then we have encountered a nested list
+        #     if len(section[1]) != 0 and "\"" == section[1][0]:
+        #         varname = section[0]
+        #         # get the start of the sequence in the list, which be the everything right after this pair
+        #         sos = cs_tokens.index(pair, idx) + 1
+        #         # now find the end of the sequence
+        #         for eos in range(sos, len(cs_tokens)):
+        #             if '\"' in cs_tokens[eos]:
+        #                 # in the succeeding tokens if they contain another apostrophe, then it is the last element in the nested list
+        #                 break
+        #         # Reassemble the sequence and make sure these are skipped on the next pass
+        #         seq = '|'.join(cs_tokens[sos:eos]).replace('\"', '')
+        #         new_msg.update({varname: seq})
+        #         idx += (eos - sos)
+        #     else:
+        #         varname = section[0]
+        #         var = section[1]
+        #         if len(var) == 0:
+        #             var = "NA"
+        #         if _isfloat(var):
+        #             if _isint(var):
+        #                 var = int(var)
+        #             else:
+        #                 var = float(var)
+        #         elif _isbool(var):
+        #             var = var.lower()  # JSON standard
+        #         new_msg.update({varname: var})
+        #     idx += 1
+        # return new_msg
 
     def get_alog(self, alogf=None, include_only=[], exclude=[], use_strategies=True):
         """ Provided a path to a MOOS alogf we return nested dictionaries of the recorded data. Format: 
@@ -487,6 +545,16 @@ class MWDataMgr:
                 temp.loc[len(temp.index)] = [key, value]
         temp['time'] = temp['time'].astype(float)
         temp['entropy'] = temp['entropy'].astype(float)
+        return temp
+    def processVehicleReturnPositionLogs(self, data):
+        temp = pd.DataFrame(columns=['time', 'x', 'y'])
+        test = data['data']['RETURN_POS']
+        for pair in data['data']['RETURN_POS']:
+            for key, value in pair[1].items():
+                temp.loc[len(temp.index)] = [pair[0], value[0], value[1]]
+        temp['time'] = temp['time'].astype(float)
+        temp['x'] = temp['x'].astype(float)
+        temp['y'] = temp['y'].astype(float)
         return temp
     def processAreaLog(self, data):
         temp = pd.DataFrame(columns=['time', 'region','avgArea',"minArea","maxArea","stdDevArea"])
@@ -1220,6 +1288,7 @@ if __name__ == "__main__":
             data = mwDataMgr.get_alog(source, include_only=include_only, exclude=exclude, use_strategies=True)
             if args.vehicle:
                 fuelTimeLog=mwDataMgr.processFuelTimeLog(data)
+                fuel_pos_log=mwDataMgr.processVehicleReturnPositionLogs(data)
                 #print("{bcolors.FAIL}Error{bcolors.ENDC}: Processed fuel time log")
                 #fuelWaitTimeLog=mwDataMgr.processFuelWaitLog(data)
                 #latencyAverageLog=mwDataMgr.processLatencyAverageLog(data,"vehicle")
@@ -1277,6 +1346,9 @@ if __name__ == "__main__":
                 output_path=output_directory + data["info"]["alias"]+"_fuelTime"
                 with open(output_path, 'wb') as pickle_file:
                     pickle.dump(fuelTimeLog,pickle_file)
+                output_path=output_directory + data["info"]["alias"]+"_fuelPos"
+                with open(output_path, 'wb') as pickle_file:
+                    pickle.dump(fuel_pos_log,pickle_file)
                 #print(f"\t> Output Path: {bcolors.OKBLUE}- < {output_path} >{bcolors.OKBLUE}")
                 #output_path = output_directory + data["info"]["alias"]+"_wait"
                 # with open(output_path, 'wb') as pickle_file:

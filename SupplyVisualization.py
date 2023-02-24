@@ -73,25 +73,26 @@ def generateFuelLineGraph(directory,syncTime):
         if os.path.isfile(f):
             if "DEPOT" not in filename and "SHORESIDE" not in filename and "fuelTime" in filename:
                 # # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
-                # vehicleFrame = pd.read_pickle(f)
-                # #syncTimes with all other moos logs
-                # vehicleFrame = vehicleFrame.loc[vehicleFrame['time'] > syncTime]
-                # #reset index
-                # vehicleFrame.reset_index(inplace=True)
-                # # subtract the earliest time from the time column
-                # vehicleFrame['time'] = vehicleFrame['time'] - vehicleFrame['time'].min()
-                # #temporary catch to elminate spurios data logged after we quit the experiement
-                # vehicleFrame = vehicleFrame[(vehicleFrame['time'] < 85200)]
-                # # convert the time column to a datetime object
-                # vehicleFrame['time'] = pd.to_datetime(vehicleFrame['time'], unit='s')
-                runDirectories.append(f)
-
-                #vehicleFrames.append(vehicleFrame)
+                vehicleFrame = pd.read_pickle(f)
+                #syncTimes with all other moos logs
+                vehicleFrame = vehicleFrame.loc[vehicleFrame['time'] > syncTime]
+                #reset index
+                vehicleFrame.reset_index(inplace=True)
+                # subtract the earliest time from the time column
+                vehicleFrame['time'] = vehicleFrame['time'] - vehicleFrame['time'].min()
+                #temporary catch to elminate spurios data logged after we quit the experiement
+                vehicleFrame = vehicleFrame[(vehicleFrame['time'] < 85200)]
+                # convert the time column to a datetime object
+                vehicleFrame['time'] = pd.to_datetime(vehicleFrame['time'], unit='s')
+                vehicleFrame['datetime']=vehicleFrame['time']
+                #runDirectories.append(f)
+                vehicleFrame = vehicleFrame[::4]
+                vehicleFrames.append(vehicleFrame)
 # using 6 processes to run the helper function, run fuel line graph helper in parallel over all the runDirectories using syncTime. Append the results as they arrive to the vehicle dataframe
-    with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
-        results = [executor.submit(fuelLineGraphHelper, f, syncTime) for f in runDirectories]
-        for f in concurrent.futures.as_completed(results):
-            vehicleFrames.append(f.result())
+#     with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
+#         results = [executor.submit(fuelLineGraphHelper, f, syncTime) for f in runDirectories]
+#         for f in concurrent.futures.as_completed(results):
+#             vehicleFrames.append(f.result())
         # create a scatter plot of the fuel levels of all vehicles
     fig = go.Figure()
     for frame in vehicleFrames:
@@ -456,6 +457,7 @@ def getShipQuantityInformation(directory):
 #         buttons.append(html.Button(str(shipNumber), id="ship_"+str(shipNumber), n_clicks=0))
 #     buttons.append(html.Div(id='container-button-timestamp'))
 #     return buttons
+
 def generateFuelLineFigureMap(directory, shipNumbers):
     # this function finds the number of unique depots and tank sizes in the directory
     #the function then creates a double list of figures, one for each depot and tank size combination given a ship qty
@@ -637,7 +639,7 @@ def generateAreaStatsLineGraphMap(directory, shipNumbers):
                 #generate the vehicle stabilization time from the file directory
                 syncTime=findTimeVehiclesStabilized(fileDirectory)
                 #generate the fuel line figure from the file directory and vehicle stabilization time
-                fig=generateAreaStatsLineGraphMap(fileDirectory, syncTime)
+                fig=generateAreaStatsLineGraph(fileDirectory, syncTime)
                 #add the figure to the list
                 tankList.append(fig)
             #add the tank list to the figures list
@@ -717,6 +719,78 @@ def generateSummaryAreaFigureMap(directory, shipNumbers):
         fig = generateAverageAreaSummaryFigure(df)
         shipQtyMap[shipQty]=fig
     return shipQtyMap
+def generateFuelPosFig(directory, syncTime):
+
+    runDirectories = []
+    tempFrames = []
+    vehicleFrame = pd.DataFrame(columns=['time', 'x', 'y'])
+    for filename in os.listdir(directory):
+        f = os.path.join(directory, filename)
+        # checking if it is a file
+        if os.path.isfile(f):
+            if "DEPOT" not in filename and "SHORESIDE" not in filename and "fuelPos" in filename:
+                # # read in the pickle file, create a dataframe, and append it to the list of vehicle dataframes
+                tempFrame = pd.read_pickle(f)
+
+                tempFrame = tempFrame.loc[tempFrame['time'] > syncTime]
+
+                tempFrames.append(tempFrame)
+                # subtract the earliest time from the time column
+    vehicleFrame = pd.concat(tempFrames)
+    #sort the vehicle frame by time
+    vehicleFrame.sort_values(by=['time'], inplace=True)
+    vehicleFrame['time'] = vehicleFrame['time'] - vehicleFrame['time'].min()
+    vehicleFrame.reset_index(inplace=True)
+    # vehicleFrame['time'] = pd.to_datetime(vehicleFrame['time'], unit='s')
+    # vehicleFrame['datetime']=vehicleFrame['time']
+    fig = px.scatter(vehicleFrame, x="x", y="y", color="time")
+    return fig
+
+def generateFuelPosMap(directory,shipNumbers):
+    tankSizes = set()
+    # create a set of all depot numbers
+    depotNumbers = set()
+    # determine all the unique tank sizes and depot numbers
+    for run in os.listdir(directory):
+        if "tank_" in run:
+            # split the run name using "-" as the delimiter into number of depots and tank size
+            depotNum = run.split("-")[0].split("_")[1]
+
+            tankSize = run.split("-")[1].split("_")[1]
+
+            # add the tank size and depot number to the sets
+            tankSizes.add(int(tankSize))
+            depotNumbers.add(int(depotNum))
+    # sort the tank sizes and depot numbers
+    tankSizes = sorted(tankSizes)
+    depotNumbers = sorted(depotNumbers)
+    # create a map of ship quantities to double lists of figures
+    shipQtyMap = {}
+    # iterate through the ship quantities
+    for shipQty in shipNumbers:
+        # create a list to hold the figures
+        figures = []
+        # iterate through the depot numbers
+        for depotNum in depotNumbers:
+            # iterate through the tank sizes
+            tankList = []
+            for tankSize in tankSizes:
+                # create the file directory for the fuel line graph for the given ship qty, depot number, and tank size
+                fileDirectory = os.path.join(directory,
+                                             "depots_" + str(depotNum) + "-tank_" + str(tankSize) + "-ships_" + str(
+                                                 shipQty))
+                # generate the vehicle stabilization time from the file directory
+                syncTime = findTimeVehiclesStabilized(fileDirectory)
+                # generate the fuel line figure from the file directory and vehicle stabilization time
+                fig = generateFuelPosFig(fileDirectory, syncTime)
+                # add the figure to the list
+                tankList.append(fig)
+            # add the tank list to the figures list
+            figures.append(tankList)
+        # add the figures list to the map with the ship qty as the key
+        shipQtyMap[shipQty] = figures
+    return shipQtyMap
+
 def generateDashboard(depotDirectory, vehicleDirectory):
     # fig1=generateDepotTimelines(depotDirectory)
     #Generate default figures to be updated by the callback
@@ -728,6 +802,7 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     fig7= go.Figure()
     fig8= go.Figure()
     fig9= go.Figure()
+    fig10= go.Figure()
     #syncTime=generateSyncTime(depotDirectory)
     shipQtyInfo=getShipQuantityInformation(depotDirectory)
     #we want to originally set our ship quantity to the first ship quantity in the list
@@ -736,9 +811,10 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     #generate the maps of figures for the given ship quantity
     currentWorkingDirectory=os.getcwd()
     featherDirectory=os.path.join(currentWorkingDirectory, "FeatherFiles")
-    shipQtyAreaMap=generateSummaryAreaFigureMap(vehicleDirectory, shipQtyInfo)
     usedCacheFigures=True
     if not usedCacheFigures:
+        shipQtyAreaMap=generateSummaryAreaFigureMap(vehicleDirectory, shipQtyInfo)
+
         with open(os.path.join(featherDirectory, "shipQtyAreaMap.pkl"), 'wb') as f:
             pickle.dump(shipQtyAreaMap, f)
         shipQtyIdleTimeMap=generateSummaryIdleTimeFigureMap(vehicleDirectory, shipQtyInfo)
@@ -763,6 +839,16 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         idleTimeHistogramMap=generateIdleTimeHistogramMap(vehicleDirectory, shipQtyInfo)
         with open(os.path.join(featherDirectory, "idleTimeHistogramMap.pkl"), 'wb') as f:
             pickle.dump(idleTimeHistogramMap, f)
+        latencyAverageMap=generateLatencyAverageMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "latencyAverageMap.pkl"), 'wb') as f:
+            pickle.dump(latencyAverageMap, f)
+        fuelPosMap=generateFuelPosMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "fuelPosMap.pkl"), 'wb') as f:
+            pickle.dump(fuelPosMap, f)
+        areaStatesLineGraphMap=generateAreaStatsLineGraphMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "areaStatesLineGraphMap.pkl"), 'wb') as f:
+            pickle.dump(areaStatesLineGraphMap, f)
+
     else:
         #read the maps from the pickle files
         with open(os.path.join(featherDirectory, "shipQtyAreaMap.pkl"), 'rb') as f:
@@ -781,6 +867,15 @@ def generateDashboard(depotDirectory, vehicleDirectory):
             shipIdleTimeSummaryFigureMap = pickle.load(f)
         with open(os.path.join(featherDirectory, "idleTimeHistogramMap.pkl"), 'rb') as f:
             idleTimeHistogramMap = pickle.load(f)
+        with open(os.path.join(featherDirectory, "fuelPosMap.pkl"), 'rb') as f:
+            fuelPosMap = pickle.load(f)
+        with open(os.path.join(featherDirectory, "latencyAverageMap.pkl"), 'rb') as f:
+            latencyAverageMap = pickle.load(f)
+        with open(os.path.join(featherDirectory, "areaStatesLineGraphMap.pkl"), 'rb') as f:
+            areaStatesLineGraphMap = pickle.load(f)
+
+
+
 
 
 
@@ -822,6 +917,7 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     # fig6 = generateEntropyLineGraph(vehicleDirectory,syncTime)
     # fig7 = generateAreaStatsLineGraph(vehicleDirectory,syncTime)
     # fig8 = generateVehicleFuelingCountLineGraph(vehicleDirectory,syncTime)
+
     #
 
     # fig2.update_layout(
@@ -859,7 +955,7 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     #     paper_bgcolor=colors['background'],
     #     font_color=colors['text']
     # )
-    # fig5.update_layout(
+    # fig10.update_layout(
     #     plot_bgcolor=colors['background'],
     #     paper_bgcolor=colors['background'],
     #     font_color=colors['text']
@@ -927,6 +1023,9 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         dcc.Graph(
             id='latency-average-timeline',
             figure=fig5
+        ),        dcc.Graph(
+            id='refuel-pos-graph',
+            figure=fig10
         ),dcc.Graph(
             id='area-average-graph',
             figure=fig9
@@ -1002,6 +1101,96 @@ def generateDashboard(depotDirectory, vehicleDirectory):
                 font_color=colors['text']
             )
         return fig
+    @callback(Output('latency-average-timeline', 'figure'), Input('tbl', 'active_cell'),Input('shipQty', 'data'))
+    def update_graphs(active_cell,data):
+        active_col_id = active_cell['column'] - 1 if active_cell else None
+        active_row_id = active_cell['row'] if active_cell else None
+        shipQty = data
+        fig = go.Figure()
+        if active_cell:
+            fig = latencyAverageMap[shipQty][active_row_id][active_col_id]
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+    @callback(Output('area-stats-timeline', 'figure'), Input('tbl', 'active_cell'),Input('shipQty', 'data'))
+    def update_graphs(active_cell,data):
+        active_col_id = active_cell['column'] - 1 if active_cell else None
+        active_row_id = active_cell['row'] if active_cell else None
+        shipQty = data
+        fig = go.Figure()
+        if active_cell:
+            fig = areaStatesLineGraphMap[shipQty][active_row_id][active_col_id]
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+    @callback(Output('fueling-count-timeline', 'figure'), Input('tbl', 'active_cell'),Input('shipQty', 'data'))
+    def update_graphs(active_cell,data):
+        active_col_id = active_cell['column'] - 1 if active_cell else None
+        active_row_id = active_cell['row'] if active_cell else None
+        shipQty = data
+        fig = go.Figure()
+        if active_cell:
+            fig = shipQtyFuelCountMap[shipQty][active_row_id][active_col_id]
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+    @callback(Output('depot-latency-graph', 'figure'), Input('tbl', 'active_cell'),Input('shipQty', 'data'))
+    def update_graphs(active_cell,data):
+        active_col_id = active_cell['column'] - 1 if active_cell else None
+        active_row_id = active_cell['row'] if active_cell else None
+        shipQty = data
+        fig = go.Figure()
+        if active_cell:
+            fig = shipIdleTimeSummaryFigureMap[shipQty]
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+    @callback(Output('area-average-graph', 'figure'), Input('tbl', 'active_cell'),Input('shipQty', 'data'))
+    def update_graphs(active_cell,data):
+        active_col_id = active_cell['column'] - 1 if active_cell else None
+        active_row_id = active_cell['row'] if active_cell else None
+        shipQty = data
+        fig = go.Figure()
+        if active_cell:
+            fig = shipAreaSummaryFigureMap[shipQty]
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+    @callback(Output('refuel-pos-graph', 'figure'), Input('tbl', 'active_cell'),Input('shipQty', 'data'))
+    def update_graphs(active_cell,data):
+        active_col_id = active_cell['column'] - 1 if active_cell else None
+        active_row_id = active_cell['row'] if active_cell else None
+        shipQty = data
+        fig = go.Figure()
+        if active_cell:
+            fig = fuelPosMap[shipQty][active_row_id][active_col_id]
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
+
+
+
+
+
+
     # @callback(Output('latency-average-timeline', 'figure'), Input('tbl', 'active_cell'))
     # def update_graphs(active_cell):
     #     active_col_id = active_cell['column_id'] if active_cell else None

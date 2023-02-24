@@ -32,12 +32,12 @@ do
 #XLOGS are way slower than the LOGS, so we will process them first in parallel to maximize the speed of the script
   UNIQUE_OUTPUT_DIRECTORY="$OUTPUT_DIRECTORY/depots_$NUM_DEPOTS-tank_$TANK_SIZE-ships_$NUM_SHIPS"
   echo "Output directory: $UNIQUE_OUTPUT_DIRECTORY"
-  for entry in "$folder"/XLOG*/*.alog
-  do
-    #echo $entry
-    cp $entry "$SHORE_DATA_DIRECTORY"
-    python3 ./MWDataMgr.py -s $entry -o $UNIQUE_OUTPUT_DIRECTORY -i $SHORE_TOPICS --shore --moos --script --topic_mapping $SHORE_TOPICS_MAPPING &
-  done
+#  for entry in "$folder"/XLOG*/*.alog
+#  do
+#    #echo $entry
+#    cp $entry "$SHORE_DATA_DIRECTORY"
+#    python3 ./MWDataMgr.py -s $entry -o $UNIQUE_OUTPUT_DIRECTORY -i $SHORE_TOPICS --shore --moos --script --topic_mapping $SHORE_TOPICS_MAPPING &
+#  done
 
 done
 wait
@@ -61,19 +61,19 @@ do
   do
     if ! [[ "$entry"  =~ .*"DEPOT_".* ]]; then
       #echo $entry
-      cp $entry "$VEHICLE_DATA_DIRECTORY"
-      echo -e $entry
+#      cp $entry "$VEHICLE_DATA_DIRECTORY"
+#      echo -e $entry
       python3 ./MWDataMgr.py -s $entry -o $UNIQUE_OUTPUT_DIRECTORY -i $VEHICLE_TOPICS --vehicle --moos --script --topic_mapping $VEHICLE_TOPICS_MAPPING &
     fi
   done
 
-  for entry in "$folder"/LOG*/*.alog
-  do
-    if [[ "$entry"  =~ .*"DEPOT_".* ]]; then
-      #echo $entry
-      cp $entry "$DEPOT_DATA_DIRECTORY"
-      python3 ./MWDataMgr.py -s $entry -o $UNIQUE_OUTPUT_DIRECTORY -i $DEPOT_TOPICS --depot --moos --script --topic_mapping $DEPOT_TOPICS_MAPPING &
-    fi
-  done
+#  for entry in "$folder"/LOG*/*.alog
+#  do
+#    if [[ "$entry"  =~ .*"DEPOT_".* ]]; then
+#      #echo $entry
+#      cp $entry "$DEPOT_DATA_DIRECTORY"
+#      python3 ./MWDataMgr.py -s $entry -o $UNIQUE_OUTPUT_DIRECTORY -i $DEPOT_TOPICS --depot --moos --script --topic_mapping $DEPOT_TOPICS_MAPPING &
+#    fi
+#  done
   wait
 done
