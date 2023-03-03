@@ -965,41 +965,40 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         html.H1(children='Ship Supply Dashboard Visualization Tool', style={
             'textAlign': 'center',
             'color': colors['text']
-        }),dbc.Container([
-    dbc.Label('Click a cell in the table:', style={
-            'textAlign': 'center',
-            'color': colors['text']
-        }), dash_table.DataTable(shipQtyDF.to_dict('records'),[{"name": str(i), "id": str(i)} for i in shipQtyDF.columns], id='stbl',style_data={
-        'backgroundColor': colors['background'],'textAlign': 'center',
-        'color': colors['text']
-    },style_header={
-        'backgroundColor': 'rgb(30, 30, 30)','textAlign': 'center',
-        'color': colors['text']
-    }),
-    dash_table.DataTable(shipQtySummaryMap[shipQty].to_dict('records'),[{"name": str(i), "id": str(i)} for i in shipQtySummaryMap[shipQty].columns], id='tbl',style_data={
-        'backgroundColor': colors['background'],
-        'color': colors['text']
-    },style_header={
-        'backgroundColor': 'rgb(30, 30, 30)',
-        'color': colors['text']
-    }),
-    dbc.Alert(id='tbl_out')
-            ,
+        }), dbc.Container([
+            dbc.Label('Click a cell in the table:', style={
+                'textAlign': 'center',
+                'color': colors['text']
+            }), dash_table.DataTable(shipQtyDF.to_dict('records'), [{"name": str(i), "id": str(i)} for i in shipQtyDF.columns], id='stbl', style_data={
+                'backgroundColor': colors['background'], 'textAlign': 'center',
+                'color': colors['text']
+            }, style_header={
+                'backgroundColor': 'rgb(30, 30, 30)', 'textAlign': 'center',
+                'color': colors['text']
+            }),
+            dash_table.DataTable(shipQtySummaryMap[shipQty].to_dict('records'), [{"name": str(i), "id": str(i)} for i in shipQtySummaryMap[shipQty].columns], id='tbl', style_data={
+                'backgroundColor': colors['background'],
+                'color': colors['text']
+            }, style_header={
+                'backgroundColor': 'rgb(30, 30, 30)',
+                'color': colors['text']
+            }),
+            dbc.Alert(id='tbl_out'),
             dbc.Alert(id='stbl_out')
 
-]),
-    #
-    #     html.Div(children='''
-    #         Run: 10/5/22 at 2100
-    #     ''', style={
-    #         'textAlign': 'center',
-    #         'color': colors['text']
-    #     }),
-    #     #
-    #     # dcc.Graph(
-    #     #     id='Fueling Histogram',
-    #     #     figure=fig1
-    #     # ),
+        ]),
+        #
+        #     html.Div(children='''
+        #         Run: 10/5/22 at 2100
+        #     ''', style={
+        #         'textAlign': 'center',
+        #         'color': colors['text']
+        #     }),
+        #     #
+        #     # dcc.Graph(
+        #     #     id='Fueling Histogram',
+        #     #     figure=fig1
+        #     # ),
         dcc.Graph(
             id='fueling-timeline',
             figure=fig2
@@ -1023,18 +1022,20 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         dcc.Graph(
             id='latency-average-timeline',
             figure=fig5
-        ),        dcc.Graph(
-            id='refuel-pos-graph',
+        ),  dcc.Graph(
+            id='refuel-pos-graph', style={'width': '60vh', 'height': '60vh', "display": "block",
+                                          "margin-left": "auto",
+                                          "margin-right": "auto", },
             figure=fig10
-        ),dcc.Graph(
+        ), dcc.Graph(
             id='area-average-graph',
             figure=fig9
         ),
         dcc.Graph(
             id='depot-latency-graph',
             figure=fig3
-        ),dcc.Store(id="shipQty", data=shipQty)
-        #
+        ), dcc.Store(id="shipQty", data=shipQty)
+        # make a new graph  from figure 10 aligned in the center
     ])
 
     # @callback(Output('tbl_out', 'children'), Input('tbl', 'active_cell'))
@@ -1179,6 +1180,10 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         fig = go.Figure()
         if active_cell:
             fig = fuelPosMap[shipQty][active_row_id][active_col_id]
+            # create a pandas dataframe containing the boundary coordinates in terms of x and y
+            df = pd.DataFrame({'x': [-575, -575, 4925, 4925], 'y': [2300, -3050, -3050, 2300]})
+            #add a trace to the figure containing the boundary coordinates
+            fig.add_trace(go.Scatter(x=df['x'], y=df['y'], mode='lines', name='boundary'))
             fig.update_layout(
                 plot_bgcolor=colors['background'],
                 paper_bgcolor=colors['background'],
