@@ -10,6 +10,8 @@ from pathlib import Path
 from gluonts.dataset.field_names import FieldName
 from gluonts.dataset.common import ListDataset
 
+
+from gluonts.dataset.pandas import PandasDataset
 def generateIdleTimeSeriesDataFrameList(directory):
     #create a set of all tank sizes
     tankSizes = set()
@@ -96,24 +98,123 @@ def generateSingleIdleTimeSeriesDataset(directory,syncTime,depotNum, tankSize, s
                 #rename the average column to values
                 latencyFrame.rename(columns={'average': 'values'}, inplace=True)
                 return latencyFrame
+def getRunCombinations(directory):
+        #create a set of all tank sizes
+    tankSizes = set()
+    #create a set of all depot numbers
+    depotNumbers = set()
+
+    shipNumbers= set()
+    for folder in os.listdir(directory):
+        if "ships_" in folder:
+            shipNumbers.add(int(folder.split("-")[2].split("_")[1]))
+    #sort the ship numbers
+    shipNumbers=sorted(shipNumbers)
+    #convert the ship numbers to a list
+    shipNumbers=list(shipNumbers)
+    #determine all the unique tank sizes and depot numbers
+    for run in os.listdir(directory):
+        if "tank_" in run:
+            #split the run name using "-" as the delimiter into number of depots and tank size
+            depotNum=run.split("-")[0].split("_")[1]
+            tankSize=run.split("-")[1].split("_")[1]
+            #add the tank size and depot number to the sets
+
+            tankSizes.add(int(tankSize))
+            depotNumbers.add(int(depotNum))
+    #sort the tank sizes and depot numbers
+    tankSizes=sorted(tankSizes)
+    depotNumbers=sorted(depotNumbers)
+    return shipNumbers, tankSizes, depotNumbers
 #define a function to create a gluoTS dataset from a list of dataframes
-def createGluonTSDataSet(dfList):
-    #create a list of dictionaries for the gluonTS model
-    gluonTSList=[]
-    #iterate through the dataframes in the list and create a dictionary for each one
-    for df in dfList:
-        #create a dictionary for the gluonTS model
-        gluonTSList.append({'target': df['averageLatency'].values, 'start': df['time'].min(), 'feat_static_cat': [df['stat_cat_1'].values[0], df['stat_cat_2'].values[0], df['stat_cat_3'].values[0]]})
-    #create a gluonTS dataset from the list of dictionaries
-    gluonTSDataSet=ListDataset(gluonTSList, freq='1min')
+def createGluonTSDataSet(dfList,directory):
+#split the list into training and testing dataframes with 70 percent of the data for training and 30 percent for testing
+    trainList=dfList[:int(len(dfList)*0.7)]
+    testList=dfList[int(len(dfList)*0.7):]
+    #create a gluonTSDataSet dictionary
+    gluonTSDataSet={}
+    #create a dataset dictionary for the training data
+    multiple_train = {}
+    #add each trainList dataframe to the dictionary each getting its own key
+    for i in range(len(trainList)):
+        multiple_train[i]=trainList[i]
+    #create a dataset dictionary for the testing data
+    multiple_test = {}
+    #add each testList dataframe to the dictionary each getting its own key
+    for i in range(len(testList)):
+        multiple_test[i]=testList[i]
+
+    #create a static feature dictionary for the gluonTS model
+    # test=pd.Categorical(np.random.choice(["red", "green", "blue"], size=10))
+    depotCategoryList= []
+    #iterate through the trainList dataframes and add the depot number to the list
+    for df in trainList:
+        depotCategoryList.append(df['stat_cat_1'].values[0])
+    #create a categorical feature for the depots
+    depots = pd.Categorical(depotCategoryList)
+    #iterate through the trainList dataframes and add the tank size to the list
+    tankCategoryList= []
+    for df in trainList:
+        tankCategoryList.append(df['stat_cat_2'].values[0])
+    #create a categorical feature for the tank sizes
+    tanks = pd.Categorical(tankCategoryList)
+    #iterate through the trainList dataframes and add the ship number to the list
+    shipCategoryList= []
+    for df in trainList:
+        shipCategoryList.append(df['stat_cat_3'].values[0])
+    #create a categorical feature for the ship numbers
+    ships = pd.Categorical(shipCategoryList)
+    static_features = pd.DataFrame({'stat_cat_1': depots,"stat_cat_2": tanks,"stat_cat_3": ships},index=list(multiple_train.keys()))
+
+    
+    
+    gluonTSDataSet['train']=PandasDataset(multiple_train, freq='1min', static_features=static_features,target='values')
+
+
+
+
+
+    depotCategoryList= []
+    #iterate through the testList dataframes and add the depot number to the list
+    for df in testList:
+        depotCategoryList.append(df['stat_cat_1'].values[0])
+    #create a categorical feature for the depots
+    depots = pd.Categorical(depotCategoryList)
+    #iterate through the testList dataframes and add the tank size to the list
+    tankCategoryList= []
+    for df in testList:
+        tankCategoryList.append(df['stat_cat_2'].values[0])
+    #create a categorical feature for the tank sizes
+    tanks = pd.Categorical(tankCategoryList)
+    #iterate through the testList dataframes and add the ship number to the list
+    shipCategoryList= []
+    for df in testList:
+        shipCategoryList.append(df['stat_cat_3'].values[0])
+    #create a categorical feature for the ship numbers
+    ships = pd.Categorical(shipCategoryList)
+    static_features = pd.DataFrame({'stat_cat_1': depots,"stat_cat_2": tanks,"stat_cat_3": ships},index=list(multiple_test.keys()))
+
+
+
+
+
+
+
+
+
+
+    gluonTSDataSet['test']=PandasDataset(multiple_test, freq='1min', static_features=static_features,target='values')
+    # #create a list of dictionaries for the gluonTS model
+    # gluonTSList=[]
+    # #iterate through the dataframes in the list and create a dictionary for each one
+    # for df in dfList:
+    #     #create a dictionary for the gluonTS model
+    #     gluonTSList.append({'target': df['values'].values, 'start': df['time'].min(), 'feat_static_cat': [df['stat_cat_1'].values[0], df['stat_cat_2'].values[0], df['stat_cat_3'].values[0]]})
+    # #create a gluonTS dataset from the list of dictionaries with 70 percent of the data for training and 30 percent for testing
+    # gluonTSDataSet=ListDataset(gluonTSList, freq='1min')
+    
     return gluonTSDataSet
 
-#get the current working directory and join it with the directory "output_files" containing the data
-directory=os.path.join(os.getcwd(), "output_files")
-#generate a list of dataframes for the gluonTS model
-dfList=generateIdleTimeSeriesDataFrameList(directory)
-#generate a gluonTS dataset from the list of dataframes
-gluonTSDataSet=createGluonTSDataSet(dfList)
 
 
 # N = 10  # number of time series
