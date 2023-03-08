@@ -11,7 +11,28 @@ from gluonts.dataset.field_names import FieldName
 from gluonts.dataset.common import ListDataset
 
 
+from gluonts.itertools import Map
+
 from gluonts.dataset.pandas import PandasDataset
+
+
+from datasets import Dataset, Features, Value, Sequence
+
+
+
+class ProcessStartField():
+    ts_id = 0
+    
+    def __call__(self, data):
+        data["start"] = data["start"].to_timestamp()
+        data["feat_static_cat"] = [self.ts_id]
+        self.ts_id += 1
+        
+        return data
+
+
+
+
 def generateIdleTimeSeriesDataFrameList(directory):
     #create a set of all tank sizes
     tankSizes = set()
@@ -97,7 +118,10 @@ def generateSingleIdleTimeSeriesDataset(directory,syncTime,depotNum, tankSize, s
                 latencyFrame['stat_cat_3'] = shipNum
                 #rename the average column to values
                 latencyFrame.rename(columns={'average': 'values'}, inplace=True)
-                return latencyFrame
+                #create a dictionary dataset entry containing the start time, target, and static features
+                latencyDict = {'start': latencyFrame['time'].iloc[0], 'target': latencyFrame['values'].values, 'feat_static_cat': [depotNum, tankSize, shipNum]}
+               # latencyDict = {'start': latencyFrame['time'].iloc[0], 'target': latencyFrame['values'].values, 'stat_cat_1': [depotNum], 'stat_cat_2': [tankSize], 'stat_cat_3': [shipNum]}
+                return latencyDict
 def getRunCombinations(directory):
         #create a set of all tank sizes
     tankSizes = set()
@@ -165,14 +189,19 @@ def createGluonTSDataSet(dfList,directory):
     #create a categorical feature for the ship numbers
     ships = pd.Categorical(shipCategoryList)
     static_features = pd.DataFrame({'stat_cat_1': depots,"stat_cat_2": tanks,"stat_cat_3": ships},index=list(multiple_train.keys()))
-
+    #determine the cardinality of the static features
+    cardinality = [len(depots.categories), len(tanks.categories), len(ships.categories)]
     
     
     gluonTSDataSet['train']=PandasDataset(multiple_train, freq='1min', static_features=static_features,target='values')
+    #create a dataset dictionary for the training data
+    ts ={}
 
-
-
-
+   
+    #make a start field in the gluonTSDataSet train dictionary
+    #gluonTSDataSet['train']["start"] = pd.Timestamp("01-01-2019", freq='1min')
+    #process_start = ProcessStartField()
+    #list_ds = list(Map(process_start, gluonTSDataSet['train']))
 
     depotCategoryList= []
     #iterate through the testList dataframes and add the depot number to the list
@@ -213,7 +242,7 @@ def createGluonTSDataSet(dfList,directory):
     # #create a gluonTS dataset from the list of dictionaries with 70 percent of the data for training and 30 percent for testing
     # gluonTSDataSet=ListDataset(gluonTSList, freq='1min')
     
-    return gluonTSDataSet
+    return gluonTSDataSet,cardinality
 
 
 
@@ -227,3 +256,31 @@ def createGluonTSDataSet(dfList,directory):
 #                         for x in custom_dataset[:, :-prediction_length]],
 #                        freq=freq)
 # c = train_ds
+def getTrainSetCardinality(trainList):
+
+
+    #create a static feature dictionary for the gluonTS model
+    # test=pd.Categorical(np.random.choice(["red", "green", "blue"], size=10))
+    depotCategoryList= []
+    #iterate through the trainList dataframes and add the depot number to the list
+    for df in trainList:
+        depotCategoryList.append(df['feat_static_cat'][0])
+    #create a categorical feature for the depots
+    depots = pd.Categorical(depotCategoryList)
+    #iterate through the trainList dataframes and add the tank size to the list
+    tankCategoryList= []
+    for df in trainList:
+        tankCategoryList.append(df['feat_static_cat'][1])
+    #create a categorical feature for the tank sizes
+    tanks = pd.Categorical(tankCategoryList)
+    #iterate through the trainList dataframes and add the ship number to the list
+    shipCategoryList= []
+    for df in trainList:
+        shipCategoryList.append(df['feat_static_cat'][2])
+    #create a categorical feature for the ship numbers
+    ships = pd.Categorical(shipCategoryList)
+    
+
+    #determine the cardinality of the static features
+    cardinality = [len(depots.categories), len(tanks.categories), len(ships.categories)]
+    return cardinality
