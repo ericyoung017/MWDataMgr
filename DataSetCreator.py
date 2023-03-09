@@ -118,6 +118,10 @@ def generateSingleIdleTimeSeriesDataset(directory,syncTime,depotNum, tankSize, s
                 latencyFrame['stat_cat_3'] = shipNum
                 #rename the average column to values
                 latencyFrame.rename(columns={'average': 'values'}, inplace=True)
+                #make a new frame with every tenth value from latencyFrame
+                #latencyFrame=latencyFrame.iloc[::3]
+                latencyFrame["time1"]=latencyFrame["time"]
+                latencyFrame = latencyFrame.set_index('time1')
                 #create a dictionary dataset entry containing the start time, target, and static features
                 latencyDict = {'start': latencyFrame['time'].iloc[0], 'target': latencyFrame['values'].values, 'feat_static_cat': [depotNum, tankSize, shipNum]}
                # latencyDict = {'start': latencyFrame['time'].iloc[0], 'target': latencyFrame['values'].values, 'stat_cat_1': [depotNum], 'stat_cat_2': [tankSize], 'stat_cat_3': [shipNum]}
