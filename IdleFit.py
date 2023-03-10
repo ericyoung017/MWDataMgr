@@ -271,14 +271,16 @@ directory=os.path.join(os.getcwd(), "output_files")
 dfList=generateIdleTimeSeriesDataFrameList(directory)
 #generate a gluonTS dataset from the list of dataframes
 #dataset,card=createGluonTSDataSet(dfList,directory)
+
+
 trainList=dfList[:int(len(dfList)*0.7)]
 testList=dfList[int(len(dfList)*0.7):]
 
 card=getTrainSetCardinality(trainList)
-
-
-
-
+#
+#
+# trainList=dfList
+# testList=dfList #FIX THIS LATER, TRAIN AND TEST SETS SHOULD BE SEPARATE
 
 
 
@@ -291,7 +293,7 @@ card=getTrainSetCardinality(trainList)
 
 
 
-freq = "3min"
+freq = "1min"
 prediction_length = 60
 
 features  = Features(
@@ -299,10 +301,6 @@ features  = Features(
         "start": Value("timestamp[s]"),
         "target": Sequence(Value("float32")),
         "feat_static_cat": Sequence(Value("uint64")),
-        # "feat_static_real":  Sequence(Value("float32")),
-        # "feat_dynamic_real": Sequence(Sequence(Value("uint64"))),
-        # "feat_dynamic_cat": Sequence(Sequence(Value("uint64"))),
-        #"item_id": Value("string"),
     }
 )
 train_dataset= Dataset.from_list(trainList,features)
@@ -320,22 +318,18 @@ test_dataset.set_transform(partial(transform_start_field, freq=freq))
 #train_dataset.set_transform(partial(transform_start_field, freq=freq))
 #test_dataset.set_transform(partial(transform_start_field, freq=freq))
 
-#lags_sequence = get_lags_for_frequency(freq)
+lags_sequence = get_lags_for_frequency(freq)
 
 time_features = time_features_from_frequency_str(freq)
 
 config = TimeSeriesTransformerConfig(
     prediction_length=prediction_length,
     context_length=30,
-    # context_length=prediction_length, # context length
-   # lags_sequence=lags_sequence,
-   lags_sequence=[1, 2, 3, 4,5,6,7],
+   lags_sequence=lags_sequence,
     num_time_features=len(time_features) + 1, # we'll add 2 time features ("month of year" and "age", see further)
     num_static_categorical_features=3, # depot, shipnum, and tank size
-    cardinality=card, 
-    input_size=3,
-       #cardinality=[6,4,6], 
-    embedding_dimension=[2,2,1], # the model will learn an embedding of size 2 for each of the 366 possible values
+    cardinality=card,
+    embedding_dimension=[2,2,2],
     encoder_layers=4, 
     decoder_layers=4,
 )
@@ -343,12 +337,11 @@ config = TimeSeriesTransformerConfig(
 model = TimeSeriesTransformerForPrediction(config)
 
 
-
 train_dataloader = create_train_dataloader(
     config=config, 
     freq=freq, 
     data=train_dataset, 
-    batch_size=10, 
+    batch_size=256,
     num_batches_per_epoch=100,
 )
 
@@ -364,68 +357,68 @@ batch = next(iter(train_dataloader))
 for k,v in batch.items():
   print(k,v.shape, v.type())
 #print the 
-# outputs = model(
-#     past_values=batch["past_values"],
-#     past_time_features=batch["past_time_features"],
-#     past_observed_mask=batch["past_observed_mask"],
-#     static_categorical_features=batch["static_categorical_features"],
-#     static_real_features=batch["static_real_features"],
-#     future_values=batch["future_values"],
-#     future_time_features=batch["future_time_features"],
-#     future_observed_mask=batch["future_observed_mask"],
-#     output_hidden_states=True
-# )
-
-
-accelerator = Accelerator()
-device = accelerator.device
-
-model.to(device)
-optimizer = Adam(model.parameters(), lr=1e-3)
- 
-model, optimizer, train_dataloader = accelerator.prepare(
-    model, optimizer, train_dataloader, 
+outputs = model(
+    past_values=batch["past_values"],
+    past_time_features=batch["past_time_features"],
+    past_observed_mask=batch["past_observed_mask"],
+    static_categorical_features=batch["static_categorical_features"],
+    static_real_features=batch["static_real_features"],
+    future_values=batch["future_values"],
+    future_time_features=batch["future_time_features"],
+    future_observed_mask=batch["future_observed_mask"],
+    output_hidden_states=True
 )
 
-for epoch in range(40):
-    model.train()
-    for batch in train_dataloader:
-        optimizer.zero_grad()
-        outputs = model(
-            static_categorical_features=batch["static_categorical_features"].to(device),
-            static_real_features=batch["static_real_features"].to(device),
-            past_time_features=batch["past_time_features"].to(device),
-            past_values=batch["past_values"].to(device),
-            future_time_features=batch["future_time_features"].to(device),
-            future_values=batch["future_values"].to(device),
-            past_observed_mask=batch["past_observed_mask"].to(device),
-            future_observed_mask=batch["future_observed_mask"].to(device),
-        )
-        loss = outputs.loss
 
-        # Backpropagation
-        accelerator.backward(loss)
-        optimizer.step()
-
-        print(loss.item())
-
-
-
-
-model.eval()
-
-forecasts = []
-
-for batch in test_dataloader:
-    outputs = model.generate(
-        static_categorical_features=batch["static_categorical_features"].to(device),
-        static_real_features=batch["static_real_features"].to(device),
-        past_time_features=batch["past_time_features"].to(device),
-        past_values=batch["past_values"].to(device),
-        future_time_features=batch["future_time_features"].to(device),
-        past_observed_mask=batch["past_observed_mask"].to(device),
-    )
-    forecasts.append(outputs.sequences.cpu().numpy())
-
-    forecasts = np.vstack(forecasts)
-    print(forecasts.shape)
+# accelerator = Accelerator()
+# device = accelerator.device
+#
+# model.to(device)
+# optimizer = Adam(model.parameters(), lr=1e-3)
+#
+# model, optimizer, train_dataloader = accelerator.prepare(
+#     model, optimizer, train_dataloader,
+# )
+#
+# for epoch in range(40):
+#     model.train()
+#     for batch in train_dataloader:
+#         optimizer.zero_grad()
+#         outputs = model(
+#             static_categorical_features=batch["static_categorical_features"].to(device),
+#             static_real_features=batch["static_real_features"].to(device),
+#             past_time_features=batch["past_time_features"].to(device),
+#             past_values=batch["past_values"].to(device),
+#             future_time_features=batch["future_time_features"].to(device),
+#             future_values=batch["future_values"].to(device),
+#             past_observed_mask=batch["past_observed_mask"].to(device),
+#             future_observed_mask=batch["future_observed_mask"].to(device),
+#         )
+#         loss = outputs.loss
+#
+#         # Backpropagation
+#         accelerator.backward(loss)
+#         optimizer.step()
+#
+#         print(loss.item())
+#
+#
+#
+#
+# model.eval()
+#
+# forecasts = []
+#
+# for batch in test_dataloader:
+#     outputs = model.generate(
+#         static_categorical_features=batch["static_categorical_features"].to(device),
+#         static_real_features=batch["static_real_features"].to(device),
+#         past_time_features=batch["past_time_features"].to(device),
+#         past_values=batch["past_values"].to(device),
+#         future_time_features=batch["future_time_features"].to(device),
+#         past_observed_mask=batch["past_observed_mask"].to(device),
+#     )
+#     forecasts.append(outputs.sequences.cpu().numpy())
+#
+#     forecasts = np.vstack(forecasts)
+#     print(forecasts.shape)

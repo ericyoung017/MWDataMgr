@@ -34,6 +34,9 @@ class ProcessStartField():
 
 
 def generateIdleTimeSeriesDataFrameList(directory):
+    shipMap = {}
+    tankMap = {}
+    depotMap = {}
     #create a set of all tank sizes
     tankSizes = set()
     #create a set of all depot numbers
@@ -45,8 +48,11 @@ def generateIdleTimeSeriesDataFrameList(directory):
             shipNumbers.add(int(folder.split("-")[2].split("_")[1]))
     #sort the ship numbers
     shipNumbers=sorted(shipNumbers)
+
     #convert the ship numbers to a list
     shipNumbers=list(shipNumbers)
+    for i in range(len(shipNumbers)):
+        shipMap[shipNumbers[i]]=i
     #determine all the unique tank sizes and depot numbers
     for run in os.listdir(directory):
         if "tank_" in run:
@@ -59,7 +65,11 @@ def generateIdleTimeSeriesDataFrameList(directory):
             depotNumbers.add(int(depotNum))
     #sort the tank sizes and depot numbers
     tankSizes=sorted(tankSizes)
+    for i in range(len(tankSizes)):
+        tankMap[tankSizes[i]]=i
     depotNumbers=sorted(depotNumbers)
+    for i in range(len(depotNumbers)):
+        depotMap[depotNumbers[i]]=i
     #create a list of dataframes corresponding to the timeSeries data for the gluonTS model
     dfList=[]
 
@@ -69,7 +79,7 @@ def generateIdleTimeSeriesDataFrameList(directory):
             for depotNum in depotNumbers:
                 runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize)+"-ships_"+str(shipNum))
                 syncTime=findTimeVehiclesStabilized(runDirectory)
-                dfList.append(generateSingleIdleTimeSeriesDataset(runDirectory, syncTime, depotNum, tankSize, shipNum))
+                dfList.append(generateSingleIdleTimeSeriesDataset(runDirectory, syncTime, depotNum, tankSize, shipNum, shipMap, tankMap, depotMap))
     return dfList
 
 def findTimeVehiclesStabilized(directory,):
@@ -86,7 +96,7 @@ def findTimeVehiclesStabilized(directory,):
                 stabilizedTimes.append( vehicleFrame['time'].min())
     return max(stabilizedTimes)
 
-def generateSingleIdleTimeSeriesDataset(directory,syncTime,depotNum, tankSize, shipNum):
+def generateSingleIdleTimeSeriesDataset(directory,syncTime,depotNum, tankSize, shipNum, shipMap, tankMap, depotMap):
     for filename in os.listdir(directory):
         f = os.path.join(directory, filename)
         # checking if it is a file
@@ -123,7 +133,7 @@ def generateSingleIdleTimeSeriesDataset(directory,syncTime,depotNum, tankSize, s
                 latencyFrame["time1"]=latencyFrame["time"]
                 latencyFrame = latencyFrame.set_index('time1')
                 #create a dictionary dataset entry containing the start time, target, and static features
-                latencyDict = {'start': latencyFrame['time'].iloc[0], 'target': latencyFrame['values'].values, 'feat_static_cat': [depotNum, tankSize, shipNum]}
+                latencyDict = {'start': latencyFrame['time'].iloc[0], 'target': latencyFrame['values'].values, 'feat_static_cat': [depotMap[depotNum], tankMap[tankSize], shipMap[shipNum]]}
                # latencyDict = {'start': latencyFrame['time'].iloc[0], 'target': latencyFrame['values'].values, 'stat_cat_1': [depotNum], 'stat_cat_2': [tankSize], 'stat_cat_3': [shipNum]}
                 return latencyDict
 def getRunCombinations(directory):
@@ -195,7 +205,7 @@ def createGluonTSDataSet(dfList,directory):
     static_features = pd.DataFrame({'stat_cat_1': depots,"stat_cat_2": tanks,"stat_cat_3": ships},index=list(multiple_train.keys()))
     #determine the cardinality of the static features
     cardinality = [len(depots.categories), len(tanks.categories), len(ships.categories)]
-    
+
     
     gluonTSDataSet['train']=PandasDataset(multiple_train, freq='1min', static_features=static_features,target='values')
     #create a dataset dictionary for the training data
@@ -263,8 +273,6 @@ def createGluonTSDataSet(dfList,directory):
 def getTrainSetCardinality(trainList):
 
 
-    #create a static feature dictionary for the gluonTS model
-    # test=pd.Categorical(np.random.choice(["red", "green", "blue"], size=10))
     depotCategoryList= []
     #iterate through the trainList dataframes and add the depot number to the list
     for df in trainList:
@@ -283,8 +291,8 @@ def getTrainSetCardinality(trainList):
         shipCategoryList.append(df['feat_static_cat'][2])
     #create a categorical feature for the ship numbers
     ships = pd.Categorical(shipCategoryList)
-    
 
     #determine the cardinality of the static features
-    cardinality = [len(depots.categories), len(tanks.categories), len(ships.categories)]
+    #cardinality = [len(depots.categories), len(tanks.categories), len(ships.categories)]
+    cardinality = [depots.categories.nunique(), tanks.categories.nunique(), ships.categories.nunique()]
     return cardinality
