@@ -12,6 +12,8 @@ from gluonts.transform.sampler import InstanceSampler
 from typing import Optional,Iterable
 from transformers import PretrainedConfig
 from gluonts.dataset.field_names import FieldName
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 from gluonts.transform import (
     AddAgeFeature,
     AddObservedValuesIndicator,
@@ -34,12 +36,49 @@ from gluonts.itertools import Cyclic, IterableSlice, PseudoShuffled
 from gluonts.torch.util import IterableDataset
 from torch.utils.data import DataLoader
 from accelerate import Accelerator
-
+from transformers import FlaxBertModel
 
 from datasets import Dataset, Features, Value, Sequence
 from torch.optim import Adam
 from gluonts.dataset.common import ListDataset
-from DataSetCreator import createGluonTSDataSet, generateIdleTimeSeriesDataFrameList, getTrainSetCardinality
+from DataSetCreator import createGluonTSDataSet, generateIdleTimeSeriesDataFrameList, getListCardinality
+
+def plot(ts_index):
+    fig, ax = plt.subplots()
+
+    index = pd.period_range(
+        start=test_dataset[ts_index][FieldName.START],
+        periods=len(test_dataset[ts_index][FieldName.TARGET]),
+        freq=freq,
+    ).to_timestamp()
+
+    # Major ticks every half year, minor ticks every month,
+    # ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=(1, 7)))
+    # ax.xaxis.set_minor_locator(mdates.MonthLocator())
+
+    ax.plot(
+        index[-2*prediction_length:], 
+        test_dataset[ts_index]["target"][-2*prediction_length:],
+        label="actual",
+    )
+
+    plt.plot(
+        index[-prediction_length:], 
+        np.median(forecasts[ts_index], axis=0),
+        label="median",
+    )
+    
+    plt.fill_between(
+        index[-prediction_length:],
+        forecasts[ts_index].mean(0) - forecasts[ts_index].std(axis=0), 
+        forecasts[ts_index].mean(0) + forecasts[ts_index].std(axis=0), 
+        alpha=0.3, 
+        interpolate=True,
+        label="+/- 1-std",
+    )
+    plt.legend()
+    plt.show()
+
 @lru_cache(10_000)
 def convert_to_pandas_period(date, freq):
     return pd.Period(date, freq)
@@ -276,7 +315,8 @@ dfList=generateIdleTimeSeriesDataFrameList(directory)
 trainList=dfList[:int(len(dfList)*0.7)]
 testList=dfList[int(len(dfList)*0.7):]
 
-card=getTrainSetCardinality(trainList)
+card=getListCardinality(dfList)
+
 #
 #
 # trainList=dfList
@@ -294,7 +334,7 @@ card=getTrainSetCardinality(trainList)
 
 
 freq = "1min"
-prediction_length = 60
+prediction_length = 120
 
 features  = Features(
     {    
@@ -349,7 +389,7 @@ test_dataloader = create_test_dataloader(
     config=config, 
     freq=freq, 
     data=test_dataset,
-    batch_size=10,
+    batch_size=64,
 )
 
 
@@ -370,55 +410,62 @@ outputs = model(
 )
 
 
-# accelerator = Accelerator()
-# device = accelerator.device
-#
-# model.to(device)
-# optimizer = Adam(model.parameters(), lr=1e-3)
-#
-# model, optimizer, train_dataloader = accelerator.prepare(
-#     model, optimizer, train_dataloader,
-# )
-#
-# for epoch in range(40):
-#     model.train()
-#     for batch in train_dataloader:
-#         optimizer.zero_grad()
-#         outputs = model(
-#             static_categorical_features=batch["static_categorical_features"].to(device),
-#             static_real_features=batch["static_real_features"].to(device),
-#             past_time_features=batch["past_time_features"].to(device),
-#             past_values=batch["past_values"].to(device),
-#             future_time_features=batch["future_time_features"].to(device),
-#             future_values=batch["future_values"].to(device),
-#             past_observed_mask=batch["past_observed_mask"].to(device),
-#             future_observed_mask=batch["future_observed_mask"].to(device),
-#         )
-#         loss = outputs.loss
-#
-#         # Backpropagation
-#         accelerator.backward(loss)
-#         optimizer.step()
-#
-#         print(loss.item())
-#
-#
-#
-#
-# model.eval()
-#
-# forecasts = []
-#
-# for batch in test_dataloader:
-#     outputs = model.generate(
-#         static_categorical_features=batch["static_categorical_features"].to(device),
-#         static_real_features=batch["static_real_features"].to(device),
-#         past_time_features=batch["past_time_features"].to(device),
-#         past_values=batch["past_values"].to(device),
-#         future_time_features=batch["future_time_features"].to(device),
-#         past_observed_mask=batch["past_observed_mask"].to(device),
-#     )
-#     forecasts.append(outputs.sequences.cpu().numpy())
-#
-#     forecasts = np.vstack(forecasts)
-#     print(forecasts.shape)
+accelerator = Accelerator()
+device = accelerator.device
+if(False):
+    model.to(device)
+    optimizer = Adam(model.parameters(), lr=1e-3)
+
+    model, optimizer, train_dataloader = accelerator.prepare(
+        model, optimizer, train_dataloader,
+    )
+    count =0
+    epoch=1
+    for epoch in range(40):
+        model.train()
+        for batch in train_dataloader:
+            optimizer.zero_grad()
+            outputs = model(
+                static_categorical_features=batch["static_categorical_features"].to(device),
+                static_real_features=batch["static_real_features"].to(device),
+                past_time_features=batch["past_time_features"].to(device),
+                past_values=batch["past_values"].to(device),
+                future_time_features=batch["future_time_features"].to(device),
+                future_values=batch["future_values"].to(device),
+                past_observed_mask=batch["past_observed_mask"].to(device),
+                future_observed_mask=batch["future_observed_mask"].to(device),
+            )
+            loss = outputs.loss
+
+            # Backpropagation
+            accelerator.backward(loss)
+            optimizer.step()
+            count+=1
+            #print(loss.item())
+        print(count,epoch)    
+        epoch +=1
+    torch.save(model, "model.pt")    
+
+#model.params=model.to_fp16(model.params)
+model= torch.load("model.pt")
+model.eval()
+
+batch = next(iter(test_dataloader))
+for k,v in batch.items():
+  print(k,v.shape, v.type())
+forecasts = []
+
+for batch in test_dataloader:
+    outputs = model.generate(
+        static_categorical_features=batch["static_categorical_features"].to(device),
+        static_real_features=batch["static_real_features"].to(device),
+        past_time_features=batch["past_time_features"].to(device),
+        past_values=batch["past_values"].to(device),
+        future_time_features=batch["future_time_features"].to(device),
+        past_observed_mask=batch["past_observed_mask"].to(device),
+    )
+    forecasts.append(outputs.sequences.cpu().numpy())
+
+    forecasts = np.vstack(forecasts)
+    print(forecasts.shape)
+plot(7)

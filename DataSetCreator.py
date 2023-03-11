@@ -270,7 +270,7 @@ def createGluonTSDataSet(dfList,directory):
 #                         for x in custom_dataset[:, :-prediction_length]],
 #                        freq=freq)
 # c = train_ds
-def getTrainSetCardinality(trainList):
+def getListCardinality(trainList):
 
 
     depotCategoryList= []
