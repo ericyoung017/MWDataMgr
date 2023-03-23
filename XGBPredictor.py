@@ -58,7 +58,7 @@ dtf['values']=dtf['values']/scaleFactor
 
 
 alpha = 0.95
-n_est = 30000
+n_est = 30
 to_predict = 'values'
 
 
@@ -141,7 +141,7 @@ dfPercentDiff=pd.DataFrame({'predicted_UP':y_UP,'actual_UP':y_actual_UP,'percent
                             'actual_median':y_actual_median,'percentDiff_Val_Median':percentDiff_median,'predicted_OP':y_OP,'actual_OP':y_actual_OP,'percentDiff_OP':percentDiff_OP})
 
 
-#make a dash table from the dfPercentDiff dataframe. make the predicted value cells for OP and up light red and light blue background respectively. make the actual value cells for OP and UP dark red and dark blue backgrounds respectively, and make the actual value cells for median and AVG dark green and dark yellow backgrounds respectively
+#make a dash table from the dfPercentDiff dataframe. make the predicted value cells for UP and Op light red and light blue background respectively. make the actual value cells for OP and UP dark red and dark blue backgrounds respectively, and make the actual value cells for median and AVG dark green and dark yellow backgrounds respectively
 children.append(dash_table.DataTable(
     id='table',
     columns=[{"name": i, "id": i} for i in dfPercentDiff.columns],
@@ -154,51 +154,72 @@ children.append(dash_table.DataTable(
     style_data_conditional=[
         {
             'if': {
-                'filter_query': '{predicted_OP} > {actual_OP}',
                 'column_id': 'predicted_OP'
             },
-            'backgroundColor': 'rgb(255, 0, 0)',
+            'backgroundColor': 'rgb(0, 0, 150)',
+            'color': 'white'
+        },        {
+            'if': {
+                'column_id': 'actual_OP'
+            },
+            'backgroundColor': 'rgb(0, 0, 255)',
             'color': 'white'
         },
         {            
             'if': {
-                'filter_query': '{predicted_UP} > {actual_UP}',
                 'column_id': 'predicted_UP'
             },
-            'backgroundColor': 'rgb(0, 0, 255)',
+            'backgroundColor': 'rgb(150, 0,0)',
             'color': 'white'
         },
         {
             'if': {
-                'filter_query': '{actual_OP} > {predicted_OP}',
-                'column_id': 'actual_OP'
+                'column_id': 'actual_UP'
             },
             'backgroundColor': 'rgb(255, 0, 0)',
             'color': 'white'
         },
         {
             'if': {
-                'filter_query': '{actual_UP} > {predicted_UP}',
-                'column_id': 'actual_UP'
+                'column_id': 'percentDiff_OP'
             },
-            'backgroundColor': 'rgb(0, 0, 255)',
+            'backgroundColor': 'rgb(0, 0, 50)',
             'color': 'white'
         },
         {
             'if': {
-                'filter_query': '{actual_AVG} > {predicted_Val}',
+                'column_id': 'percentDiff_UP'
+            },
+            'backgroundColor': 'rgb(50, 0, 0)',
+            'color': 'white'
+        },
+        {
+            'if': {
                 'column_id': 'actual_AVG'
             },
             'backgroundColor': 'rgb(255, 255, 0)',
-            'color': 'white'
+                        'color': 'black'
+        },
+                {
+            'if': {
+                'column_id': 'percentDiff_Val_AVG'
+            },
+            'backgroundColor': 'rgb(150, 150, 0)',
+                        'color': 'black'
         },
         {
             'if': {
-                'filter_query': '{actual_median} > {predicted_Val}',
                 'column_id': 'actual_median'
             },
             'backgroundColor': 'rgb(0, 255, 0)',
-            'color': 'white'
+                                    'color': 'black'
+        },
+                {
+            'if': {
+                'column_id': 'percentDiff_Val_Median'
+            },
+            'backgroundColor': 'rgb(0, 150, 0)',
+                                    'color': 'black'
         },
     ]
 ))
