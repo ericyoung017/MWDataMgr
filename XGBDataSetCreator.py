@@ -111,7 +111,7 @@ def generateSingeTabularDataset(directory,syncTime,depotNum, tankSize, shipNum):
                 #rename the average column to values
                 latencyFrame.rename(columns={'average': 'values'}, inplace=True)
                 #sample the data to 1000 points
-                latencyFrame = latencyFrame.sample(n=100)
+                latencyFrame = latencyFrame.sample(n=1000)
                 #create a histogram plot of the average latency values
                 # fig = px.histogram(latencyFrame, x="values")
                 # fig.show()
