@@ -58,7 +58,7 @@ dtf['values']=dtf['values']/scaleFactor
 
 
 alpha = 0.95
-n_est = 30
+n_est = 30000
 to_predict = 'values'
 
 
@@ -156,69 +156,69 @@ children.append(dash_table.DataTable(
             'if': {
                 'column_id': 'predicted_OP'
             },
-            'backgroundColor': 'rgb(0, 0, 150)',
+            'backgroundColor': 'rgb(0, 0, 50)',
             'color': 'white'
         },        {
             'if': {
                 'column_id': 'actual_OP'
             },
-            'backgroundColor': 'rgb(0, 0, 255)',
+            'backgroundColor': 'rgb(0, 0, 150)',
             'color': 'white'
         },
         {            
             'if': {
                 'column_id': 'predicted_UP'
             },
-            'backgroundColor': 'rgb(150, 0,0)',
+            'backgroundColor': 'rgb(50, 0,0)',
             'color': 'white'
         },
         {
             'if': {
                 'column_id': 'actual_UP'
             },
-            'backgroundColor': 'rgb(255, 0, 0)',
+            'backgroundColor': 'rgb(150, 0, 0)',
             'color': 'white'
         },
         {
             'if': {
                 'column_id': 'percentDiff_OP'
             },
-            'backgroundColor': 'rgb(0, 0, 50)',
+            'backgroundColor': 'rgb(0, 0, 255)',
             'color': 'white'
         },
         {
             'if': {
                 'column_id': 'percentDiff_UP'
             },
-            'backgroundColor': 'rgb(50, 0, 0)',
+            'backgroundColor': 'rgb(255, 0, 0)',
             'color': 'white'
         },
         {
             'if': {
                 'column_id': 'actual_AVG'
             },
-            'backgroundColor': 'rgb(255, 255, 0)',
+            'backgroundColor': 'rgb(150, 150, 0)',
                         'color': 'black'
         },
                 {
             'if': {
                 'column_id': 'percentDiff_Val_AVG'
             },
-            'backgroundColor': 'rgb(150, 150, 0)',
+            'backgroundColor': 'rgb(255, 255, 0)',
                         'color': 'black'
         },
         {
             'if': {
                 'column_id': 'actual_median'
             },
-            'backgroundColor': 'rgb(0, 255, 0)',
+            'backgroundColor': 'rgb(0, 150, 0)',
                                     'color': 'black'
         },
                 {
             'if': {
                 'column_id': 'percentDiff_Val_Median'
             },
-            'backgroundColor': 'rgb(0, 150, 0)',
+            'backgroundColor': 'rgb(0, 255, 0)',
                                     'color': 'black'
         },
     ]
