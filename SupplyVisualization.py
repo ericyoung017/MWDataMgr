@@ -365,16 +365,16 @@ def generateAverageAreaDataFrame(directory,shipNum):
 
 def generateDepotLatencySummaryFigure(idleSummaryDF):
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[360], mode='lines', name="250"))
-    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[720], mode='lines', name="500"))
-    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[1080], mode='lines', name="750"))
+    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[360], mode='lines', name="360"))
+    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[720], mode='lines', name="720"))
+    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[1080], mode='lines', name="1080"))
     return fig
 
 def generateAverageAreaSummaryFigure(areaSummaryDF):
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[360], mode='lines', name="250"))
-    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[720], mode='lines', name="500"))
-    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[1080], mode='lines', name="750"))
+    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[360], mode='lines', name="360"))
+    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[720], mode='lines', name="720"))
+    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[1080], mode='lines', name="1080"))
     return fig
 def generateAverageAreaSummaryFigureMap(directory, shipNumbers):
     #iterate through the ship numbers and generate a dataframe for each ship number make a figure for each ship number from the dataframe and add it to a figure map
@@ -719,6 +719,43 @@ def generateSummaryAreaFigureMap(directory, shipNumbers):
         fig = generateAverageAreaSummaryFigure(df)
         shipQtyMap[shipQty]=fig
     return shipQtyMap
+
+
+def generate3DIdleFigureMap(directory, shipNumbers):
+    #iterate through the ship quantities, calculate the summary idle time figure for each ship quantity, and add the figure to the map
+    shipQtyMap={}
+    tankDepotDFList=[]
+    for shipQty in shipNumbers:
+    #generate average idle time data frame
+        df=generateAverageIdleTimeDataFrame(directory, shipQty)
+        tankDepotDFList.append(df)
+    
+    #make a ship depot map for the three tank sizes 360, 720, 1080
+    tanks=[360, 720, 1080]
+    shipDepotMap={}
+    
+
+    for i in tanks:
+        #get the respective tank column in each of the tank depot data frames and append it to the respective ship depot map dataframe
+        count=0
+        for j in tankDepotDFList:
+            #get the column in the tank depot data frame corresponding to the right tank size
+            tempDF=j[[i]]
+            #rename the column to the ship quantity based on the index of the tank depot data frame
+            #tempDF.rename(columns={i: shipNumbers[count]})
+            tempDF.columns=[shipNumbers[count]]
+            #check if the ship depot map has the ship quantity as a key if not create a new data frame with the column from tempDF otherwise join the data frame with the column from tempDF
+            if str(i) not in shipDepotMap:
+                shipDepotMap[str(i)]=tempDF
+            else:
+                shipDepotMap[str(i)]=shipDepotMap[str(i)].join(tempDF)
+            count+=1
+        fig = go.Figure(data=[go.Surface(z=shipDepotMap[str(i)].values, x=shipDepotMap[str(i)].columns, y=shipDepotMap[str(i)].index)])
+        shipQtyMap[i]=fig 
+    
+    return shipQtyMap
+
+
 def generateFuelPosFig(directory, syncTime):
 
     runDirectories = []
@@ -803,6 +840,7 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     fig8= go.Figure()
     fig9= go.Figure()
     fig10= go.Figure()
+    fig11= go.Figure()
     #syncTime=generateSyncTime(depotDirectory)
     shipQtyInfo=getShipQuantityInformation(depotDirectory)
     #we want to originally set our ship quantity to the first ship quantity in the list
@@ -811,44 +849,46 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     #generate the maps of figures for the given ship quantity
     currentWorkingDirectory=os.getcwd()
     featherDirectory=os.path.join(currentWorkingDirectory, "FeatherFiles")
-    usedCacheFigures=True
+    usedCacheFigures=False
     if not usedCacheFigures:
-    #     shipQtyAreaMap=generateSummaryAreaFigureMap(vehicleDirectory, shipQtyInfo)
+        shipQtyAreaMap=generateSummaryAreaFigureMap(vehicleDirectory, shipQtyInfo)
 
-    #     with open(os.path.join(featherDirectory, "shipQtyAreaMap.pkl"), 'wb') as f:
-    #         pickle.dump(shipQtyAreaMap, f)
-    #     shipQtyIdleTimeMap=generateSummaryIdleTimeFigureMap(vehicleDirectory, shipQtyInfo)
-    #     with open(os.path.join(featherDirectory, "shipQtyIdleTimeMap.pkl"), 'wb') as f:
-    #         pickle.dump(shipQtyIdleTimeMap, f)
-    #     shipQtySummaryMap=generateSummaryDataFrameMap(vehicleDirectory, shipQtyInfo)
-    #     with open(os.path.join(featherDirectory, "shipQtySummaryMap.pkl"), 'wb') as f:
-    #         pickle.dump(shipQtySummaryMap, f)
-    #     shipQtyFuelLineMap=generateFuelLineFigureMap(vehicleDirectory, shipQtyInfo)
-    #     with open(os.path.join(featherDirectory, "shipQtyFuelLineMap.pkl"), 'wb') as f:
-    #         pickle.dump(shipQtyFuelLineMap, f)
-    #     shipQtyFuelCountMap=generateFuelingCountLineGraphMap(vehicleDirectory, shipQtyInfo)
-    #     with open(os.path.join(featherDirectory, "shipQtyFuelCountMap.pkl"), 'wb') as f:
-    #         pickle.dump(shipQtyFuelCountMap, f)
-    # #write the summary figure maps
-    #     shipAreaSummaryFigureMap=generateSummaryAreaFigureMap(vehicleDirectory, shipQtyInfo)
-    #     with open(os.path.join(featherDirectory, "shipAreaSummaryFigureMap.pkl"), 'wb') as f:
-    #         pickle.dump(shipAreaSummaryFigureMap, f)
-    #     shipIdleTimeSummaryFigureMap=generateSummaryIdleTimeFigureMap(vehicleDirectory, shipQtyInfo)
-    #     with open(os.path.join(featherDirectory, "shipIdleTimeSummaryFigureMap.pkl"), 'wb') as f:
-    #         pickle.dump(shipIdleTimeSummaryFigureMap, f)
-    #     idleTimeHistogramMap=generateIdleTimeHistogramMap(vehicleDirectory, shipQtyInfo)
-    #     with open(os.path.join(featherDirectory, "idleTimeHistogramMap.pkl"), 'wb') as f:
-    #         pickle.dump(idleTimeHistogramMap, f)
-    #     latencyAverageMap=generateLatencyAverageMap(vehicleDirectory, shipQtyInfo)
-    #     with open(os.path.join(featherDirectory, "latencyAverageMap.pkl"), 'wb') as f:
-    #         pickle.dump(latencyAverageMap, f)
+        with open(os.path.join(featherDirectory, "shipQtyAreaMap.pkl"), 'wb') as f:
+            pickle.dump(shipQtyAreaMap, f)
+        shipQtyIdleTimeMap=generateSummaryIdleTimeFigureMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipQtyIdleTimeMap.pkl"), 'wb') as f:
+            pickle.dump(shipQtyIdleTimeMap, f)
+        shipQtySummaryMap=generateSummaryDataFrameMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipQtySummaryMap.pkl"), 'wb') as f:
+            pickle.dump(shipQtySummaryMap, f)
+        shipQtyFuelLineMap=generateFuelLineFigureMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipQtyFuelLineMap.pkl"), 'wb') as f:
+            pickle.dump(shipQtyFuelLineMap, f)
+        shipQtyFuelCountMap=generateFuelingCountLineGraphMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipQtyFuelCountMap.pkl"), 'wb') as f:
+            pickle.dump(shipQtyFuelCountMap, f)
+    #write the summary figure maps
+        shipAreaSummaryFigureMap=generateSummaryAreaFigureMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipAreaSummaryFigureMap.pkl"), 'wb') as f:
+            pickle.dump(shipAreaSummaryFigureMap, f)
+        shipIdleTimeSummaryFigureMap=generateSummaryIdleTimeFigureMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "shipIdleTimeSummaryFigureMap.pkl"), 'wb') as f:
+            pickle.dump(shipIdleTimeSummaryFigureMap, f)
+        idleTimeHistogramMap=generateIdleTimeHistogramMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "idleTimeHistogramMap.pkl"), 'wb') as f:
+            pickle.dump(idleTimeHistogramMap, f)
+        latencyAverageMap=generateLatencyAverageMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "latencyAverageMap.pkl"), 'wb') as f:
+            pickle.dump(latencyAverageMap, f)
         fuelPosMap=generateFuelPosMap(vehicleDirectory, shipQtyInfo)
         with open(os.path.join(featherDirectory, "fuelPosMap.pkl"), 'wb') as f:
             pickle.dump(fuelPosMap, f)
-        # areaStatesLineGraphMap=generateAreaStatsLineGraphMap(vehicleDirectory, shipQtyInfo)
-        # with open(os.path.join(featherDirectory, "areaStatesLineGraphMap.pkl"), 'wb') as f:
-        #     pickle.dump(areaStatesLineGraphMap, f)
-
+        areaStatesLineGraphMap=generateAreaStatsLineGraphMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "areaStatesLineGraphMap.pkl"), 'wb') as f:
+            pickle.dump(areaStatesLineGraphMap, f)
+        I3DMap=generate3DIdleFigureMap(vehicleDirectory, shipQtyInfo)
+        with open(os.path.join(featherDirectory, "3DMap.pkl"), 'wb') as f:
+            pickle.dump(I3DMap, f)   
     else:
         #read the maps from the pickle files
         with open(os.path.join(featherDirectory, "shipQtyAreaMap.pkl"), 'rb') as f:
@@ -873,7 +913,8 @@ def generateDashboard(depotDirectory, vehicleDirectory):
             latencyAverageMap = pickle.load(f)
         with open(os.path.join(featherDirectory, "areaStatesLineGraphMap.pkl"), 'rb') as f:
             areaStatesLineGraphMap = pickle.load(f)
-
+        with open(os.path.join(featherDirectory, "3DMap.pkl"), 'rb') as f:
+            I3DMap = pickle.load(f)
 
 
 
@@ -946,6 +987,11 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         font_color=colors['text']
     )
     fig3.update_layout(
+        plot_bgcolor=colors['background'],
+        paper_bgcolor=colors['background'],
+        font_color=colors['text']
+    )
+    fig10.update_layout(
         plot_bgcolor=colors['background'],
         paper_bgcolor=colors['background'],
         font_color=colors['text']
@@ -1034,7 +1080,11 @@ def generateDashboard(depotDirectory, vehicleDirectory):
         dcc.Graph(
             id='depot-latency-graph',
             figure=fig3
-        ), dcc.Store(id="shipQty", data=shipQty)
+        ), dcc.Store(id="shipQty", data=shipQty),
+         dcc.Graph(
+            id='3d-grid-graph',
+            figure=fig10
+        )
         # make a new graph  from figure 10 aligned in the center
     ])
 
@@ -1190,7 +1240,23 @@ def generateDashboard(depotDirectory, vehicleDirectory):
                 font_color=colors['text']
             )
         return fig
-
+    #make a callback that creates a 3d surface plot where the x axis is the number 
+    #of ships, the y axis is the number of depots, and the z axis is the average latency
+    @callback(Output('3d-grid-graph', 'figure'), Input('tbl', 'active_cell'),Input('shipQty', 'data'))
+    def update_graphs(active_cell,data):
+        active_col_id = active_cell['column'] - 1 if active_cell else None
+        active_row_id = active_cell['row'] if active_cell else None
+        shipQty = data
+        tanks=[360,720,1080]
+        fig = go.Figure()
+        if active_cell:
+            fig = I3DMap[tanks[active_col_id]]
+            fig.update_layout(
+                plot_bgcolor=colors['background'],
+                paper_bgcolor=colors['background'],
+                font_color=colors['text']
+            )
+        return fig
 
 
 

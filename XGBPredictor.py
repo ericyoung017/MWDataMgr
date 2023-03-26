@@ -7,6 +7,7 @@ import dash
 import sympy as sp
 from xgboost.sklearn import XGBRegressor
 from sklearn.model_selection import ShuffleSplit
+from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from dash import Dash, html, dcc, Input, Output, callback, dash_table, State
 # log cosh quantile is a regularized quantile loss function
@@ -20,24 +21,59 @@ def log_cosh_quantile(alpha):
     return _log_cosh_quantile
 #get the current working directory and join it with the directory "output_files" containing the data
 directory=os.path.join(os.getcwd(), "output_files")
+#make an image directory with the current working directory and the name "images"
+imageDirectory=os.path.join(os.getcwd(), "images")
+#make a directory for pandas latex tables
+latexDirectory=os.path.join(os.getcwd(), "latex")
 #generate the list of dataframes
 dfList=XGBDataSetCreator.generateIdleTabularDataFrameList(directory)
 #drop index column for all dataframes
 for df in dfList:
     df=df.drop(columns=["index"])
     
+
 dfTestOriginal=[]
 dfTrain=[]
-#iterate through the dataframe list. separate dataframe with depots, tanks, and ships equal to specified values Put this dataframe in a separate list
+
+
+
+#USE THIS CODE FOR RANDOM TESTING AND TRAINING DATA#################
+#shuffle the list of dataframes
+
+#randomly select 25% of the dataframes in dfList and put them in dfTestOriginal
+#randomly select 75% of the dataframes in dfList and put them in dfTrain
 for df in dfList:
-    if df.iloc[0]["depot"]==2 and df.iloc[0]["tank"]==720 and df.iloc[0]["ship"]==10:
-        dfTestOriginal.append(df)
-    elif df.iloc[0]["depot"]==1 and df.iloc[0]["tank"]==360 and df.iloc[0]["ship"]==15:
-        dfTestOriginal.append(df)
-    elif df.iloc[0]["depot"]==4 and df.iloc[0]["tank"]==1080 and df.iloc[0]["ship"]==30:
+    if np.random.rand() < 0.25:
         dfTestOriginal.append(df)
     else:
         dfTrain.append(df)
+#create a depotPredict list containing the values of the depot column in each dataframe in dfTestOriginal
+depotPredict=[df.iloc[0]["depot"] for df in dfTestOriginal]
+#create a tankPredict list containing the values of the tank column in each dataframe in dfTestOriginal
+tankPredict=[df.iloc[0]["tank"] for df in dfTestOriginal]
+#create a shipPredict list containing the values of the ship column in each dataframe in dfTestOriginal
+shipPredict=[df.iloc[0]["ship"] for df in dfTestOriginal]
+
+
+#####################################################3
+
+#USE THIS CODE FOR SPECIFIC TESTING AND TRAINING DATA#################
+#make arrays containing the values of the columns to predict
+# depotPredict=[2,1,4]
+# tankPredict=[720,360,1080]
+# shipPredict=[10,15,30]
+# #iterate through the dataframe list. separate dataframe with depots, tanks, and ships equal to specified values Put this dataframe in a separate list
+# for df in dfList:
+#     if df.iloc[0]["depot"]==2 and df.iloc[0]["tank"]==720 and df.iloc[0]["ship"]==10:
+#         dfTestOriginal.append(df)
+#     elif df.iloc[0]["depot"]==1 and df.iloc[0]["tank"]==360 and df.iloc[0]["ship"]==15:
+#         dfTestOriginal.append(df)
+#     elif df.iloc[0]["depot"]==4 and df.iloc[0]["tank"]==1080 and df.iloc[0]["ship"]==30:
+#         dfTestOriginal.append(df)
+#     else:
+#         dfTrain.append(df)
+##########################################################################
+
 
 #concatenate the dataframes in the list into a single dataframe
 df=pd.concat(dfTrain)
@@ -62,10 +98,7 @@ n_est = 30000
 to_predict = 'values'
 
 
-#make arrays containing the values of the columns to predict
-depotPredict=[2,1,4]
-tankPredict=[720,360,1080]
-shipPredict=[10,15,30]
+
 values = np.zeros(len(tankPredict))
 #create a test dataframe for model evaluation
 dfTestPredicted=pd.DataFrame({'depot':depotPredict,'tank':tankPredict,'ship':shipPredict,'values':values})
@@ -127,20 +160,38 @@ for i in range(len(dfTestOriginal)):
     fig.add_vline(x=y_AVG[i], line_width=2, line_dash="dash", line_color="green")
     fig.add_vline(x=y_OP[i], line_width=2, line_dash="dash", line_color="blue")
     fig.add_vline(x=y_UP[i], line_width=2, line_dash="dash", line_color="red")
+    #add a  centered title that shows the values of the depot, tank, and ship
+    fig.update_layout(title={'text': 'Patrol Grid Average Idle Histogram for Run With '+str(df.iloc[0]["depot"])+' Depots, '+str(df.iloc[0]["tank"])+' sized Tank, and '+str(df.iloc[0]["ship"])+" Ships",
+         'y':0.9, # new
+         'x':0.5,
+         'xanchor': 'center',
+         'yanchor': 'top' # new
+         })
+    
+    #add a legend describing the lines
+    fig.update_layout(legend=dict(
+        yanchor="top",
+        y=0.99,
+        xanchor="left",
+        x=0.01
+    ))
     #make x axis start at zero
     fig.update_xaxes(range=[0, max(df['values'])])
+    #export the figure as a png to the images folder
+    fig.write_image(os.path.join(imageDirectory,"histogram_"+str(df.iloc[0]["depot"])+"_"+str(df.iloc[0]["tank"])+"_"+str(df.iloc[0]["ship"])+".png"))
     children.append(dcc.Graph(figure=fig))
 #create a list of percent differences between the actual and predicted values of OP, UP, and AVG
 percentDiff_OP = [abs((y_actual_OP[i]-y_OP[i])/y_actual_OP[i])*100 for i in range(len(y_actual_OP))]
 percentDiff_UP = [abs((y_actual_UP[i]-y_UP[i])/y_actual_UP[i])*100 for i in range(len(y_actual_UP))]
 percentDiff_AVG = [abs((y_actual_AVG[i]-y_AVG[i])/y_actual_AVG[i])*100 for i in range(len(y_actual_AVG))]
 percentDiff_median = [abs((y_actual_median[i]-y_AVG[i])/y_actual_median[i])*100 for i in range(len(y_actual_median))]
-#create a pandas dataframe with the actual and predicted values of OP, UP, median and AVG and the percent differences
-dfPercentDiff=pd.DataFrame({'predicted_UP':y_UP,'actual_UP':y_actual_UP,'percentDiff_UP':percentDiff_UP,
+#create a pandas dataframe with the actual and predicted values of OP, UP, median and AVG and the percent differences as well as the values for the depot, tank, and ship
+dfPercentDiff=pd.DataFrame({'depot':[df.iloc[0]["depot"] for df in dfTestOriginal], 'tank':[df.iloc[0]["tank"] for df in dfTestOriginal], 'ship':[df.iloc[0]["ship"] for df in dfTestOriginal],'predicted_UP':y_UP,'actual_UP':y_actual_UP,'percentDiff_UP':percentDiff_UP,
                             'predicted_Val':y_AVG,'actual_AVG':y_actual_AVG,'percentDiff_Val_AVG':percentDiff_AVG,
                             'actual_median':y_actual_median,'percentDiff_Val_Median':percentDiff_median,'predicted_OP':y_OP,'actual_OP':y_actual_OP,'percentDiff_OP':percentDiff_OP})
 
-
+#write the dataframe to a latex table
+dfPercentDiff.to_latex(buf=imageDirectory+"pDiff.tex", index=False)
 #make a dash table from the dfPercentDiff dataframe. make the predicted value cells for UP and Op light red and light blue background respectively. make the actual value cells for OP and UP dark red and dark blue backgrounds respectively, and make the actual value cells for median and AVG dark green and dark yellow backgrounds respectively
 children.append(dash_table.DataTable(
     id='table',
@@ -222,6 +273,21 @@ children.append(dash_table.DataTable(
                                     'color': 'black'
         },
     ]
+))
+#calculate the RMSE for the predicted values of OP, UP, AVG, and median
+RMSE_OP = mean_squared_error(y_actual_OP, y_OP,squared=False)
+RMSE_UP = mean_squared_error(y_actual_UP, y_UP,squared=False)
+RMSE_AVG = mean_squared_error(y_actual_AVG, y_AVG,squared=False)
+RMSE_median = mean_squared_error(y_actual_median, y_AVG,squared=False)
+#create a dataframe with the RMSE values
+dfRMSE = pd.DataFrame({'RMSE_UP':[RMSE_UP],'RMSE_AVG':[RMSE_AVG],'RMSE_median':[RMSE_median],'RMSE_OP':[RMSE_OP]})
+#write the dataframe to a latex table
+dfRMSE.to_latex(buf=os.path.join(latexDirectory,"RMSE.tex"), index=False)
+#make a dash table from the dfRMSE dataframe
+children.append(dash_table.DataTable(
+    id='table2',
+    columns=[{"name": i, "id": i} for i in dfRMSE.columns],
+    data=dfRMSE.to_dict('records')
 ))
 # children.append(dash_table.DataTable(
 #     id='table',
