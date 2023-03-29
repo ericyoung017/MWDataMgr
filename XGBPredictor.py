@@ -1,3 +1,5 @@
+import random
+import string
 import XGBDataSetCreator
 import os
 import pandas as pd
@@ -5,6 +7,8 @@ import numpy as np
 import plotly.graph_objects as go
 import dash
 import sympy as sp
+# import random 
+import plotly.express as px
 from xgboost.sklearn import XGBRegressor
 from sklearn.model_selection import ShuffleSplit
 from sklearn.metrics import mean_squared_error
@@ -19,22 +23,139 @@ def log_cosh_quantile(alpha):
         hess = 1 / np.cosh(err)**2
         return grad, hess
     return _log_cosh_quantile
+def generateRMSEPlot(dfList):
+    #create a dataframe with columns "Train_Size","RMSE_UP","RMSE_AVG","RMSE_median","RMSE_OP"
+    plotDFRMSE=pd.DataFrame(columns=["Train_Size","RMSE_UP","RMSE_AVG","RMSE_median","RMSE_OP"])
+    for trainSize in np.arange(0.3,0.9,0.05):
+        #vary the size of the training set to determine how many data points are needed to train the model
+        #plot the RMSE for the test set as a function of the size of the training set
+        dfTestOriginal=[]
+        dfTrain=[]
+
+
+
+        #USE THIS CODE FOR RANDOM TESTING AND TRAINING DATA#################
+        #shuffle the list of dataframes
+
+        for df in dfList:
+            if np.random.rand() < (1-trainSize):
+                dfTestOriginal.append(df)
+            else:
+                dfTrain.append(df)
+        print("Training on ",len(dfTrain)," data points")
+        #create a depotPredict list containing the values of the depot column in each dataframe in dfTestOriginal
+        depotPredict=[df.iloc[0]["depot"] for df in dfTestOriginal]
+        #create a tankPredict list containing the values of the tank column in each dataframe in dfTestOriginal
+        tankPredict=[df.iloc[0]["tank"] for df in dfTestOriginal]
+        #create a shipPredict list containing the values of the ship column in each dataframe in dfTestOriginal
+        shipPredict=[df.iloc[0]["ship"] for df in dfTestOriginal]
+
+            #concatenate the dataframes in the list into a single dataframe
+        df=pd.concat(dfTrain)
+        #drop the columns "vname" as it is not needed for the model
+        df=df.drop(columns=["vname"])
+        #reset the index of the dataframe
+        dtf=df.reset_index(drop=True)
+        #drop the index column
+        dtf=dtf.drop(columns=["index"])
+        #convert all columns to int64
+        #dtf=dtf.astype('int64')
+        scaleFactor=500
+        #divide the values column by 100
+        dtf['values']=dtf['values']/scaleFactor
+
+        alpha = 0.95
+        n_est = 300
+        to_predict = 'values'
+
+
+
+        values = np.zeros(len(tankPredict))
+        #create a test dataframe for model evaluation
+        dfTestPredicted=pd.DataFrame({'depot':depotPredict,'tank':tankPredict,'ship':shipPredict,'values':values})
+        #train dataset
+        X=dtf
+        y=dtf[to_predict]
+        X.drop([to_predict], axis=1, inplace=True)
+
+        #test dataset
+        X_test=dfTestPredicted
+        y_test=dfTestPredicted[to_predict]
+        X_test.drop([to_predict], axis=1, inplace=True)
+
+            # over predict
+        modelOP = XGBRegressor(objective=log_cosh_quantile(alpha),
+                            n_estimators=n_est,
+                            max_depth=10,
+                            n_jobs=24,
+                            learning_rate=.01)
+        modelOP.fit(X, y)
+            # under predict
+        modelUP = XGBRegressor(objective=log_cosh_quantile(1-alpha),
+                            n_estimators=n_est,
+                            max_depth=10,
+                            n_jobs=24,
+                            learning_rate=.01)
+        modelUP.fit(X, y)
+            # single prediction
+        modelAVG = XGBRegressor(n_estimators=n_est, max_depth=10, eta=0.01, subsample=1, colsample_bytree=1)
+        modelAVG.fit(X, y)
+
+        y_OP = modelOP.predict(X_test)
+        #scale the values back up by scaleFactor
+        y_OP=y_OP*scaleFactor
+        y_UP = modelUP.predict(X_test)
+        #scale the values back up by scaleFactor
+        y_UP=y_UP*scaleFactor
+        y_AVG = modelAVG.predict(X_test)
+        #scale the values back up by scaleFactor
+        y_AVG=y_AVG*scaleFactor
+        y_actual_AVG = [original['values'].mean() for original in dfTestOriginal]
+        y_actual_median = [original['values'].median() for original in dfTestOriginal]
+        y_actual_OP = [original['values'].quantile(alpha) for original in dfTestOriginal]
+        y_actual_UP = [original['values'].quantile(1-alpha) for original in dfTestOriginal]
+        #calculate the RMSE for the predicted values of OP, UP, AVG, and median
+        RMSE_OP = mean_squared_error(y_actual_OP, y_OP,squared=False)
+        RMSE_UP = mean_squared_error(y_actual_UP, y_UP,squared=False)
+        RMSE_AVG = mean_squared_error(y_actual_AVG, y_AVG,squared=False)
+        RMSE_median = mean_squared_error(y_actual_median, y_AVG,squared=False)
+        #create a dataframe with the RMSE values
+        dfRMSE = pd.DataFrame({'Train_Size':[len(dfTrain)],'RMSE_UP':[RMSE_UP],'RMSE_AVG':[RMSE_AVG],'RMSE_median':[RMSE_median],'RMSE_OP':[RMSE_OP]})
+        #concat the dataframe to the plotDFRMSE dataframe
+        plotDFRMSE=pd.concat([plotDFRMSE,dfRMSE])
+    #sort the plotDFRMSE dataframe by the train size
+    plotDFRMSE=plotDFRMSE.sort_values(by=['Train_Size'])
+    #generate a random string for the filename
+    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+    plotDFRMSE.to_latex(buf=os.path.join(latexDirectory,filename+"RMSE"+str(n_est)+".tex"), index=False)
+    #generate CSV for the plotDFRMSE dataframe
+    plotDFRMSE.to_csv(os.path.join(csvDirectory,filename+"RMSE.csv"), index=False)
+    #create a plotly figure from the plotDFRMSE dataframe
+    fig = px.line(plotDFRMSE, x="Train_Size", y=["RMSE_UP","RMSE_AVG","RMSE_median","RMSE_OP"], title='RMSE vs. Training Size')
+    return fig 
+
+
+
+
 #get the current working directory and join it with the directory "output_files" containing the data
 directory=os.path.join(os.getcwd(), "output_files")
 #make an image directory with the current working directory and the name "images"
 imageDirectory=os.path.join(os.getcwd(), "images")
 #make a directory for pandas latex tables
 latexDirectory=os.path.join(os.getcwd(), "latex")
+#make a directory for the csvs
+csvDirectory=os.path.join(os.getcwd(), "csv")
 #generate the list of dataframes
 dfList=XGBDataSetCreator.generateIdleTabularDataFrameList(directory)
 #drop index column for all dataframes
 for df in dfList:
     df=df.drop(columns=["index"])
     
+fig=generateRMSEPlot(dfList)
+fig.show()
 
 dfTestOriginal=[]
 dfTrain=[]
-
 
 
 #USE THIS CODE FOR RANDOM TESTING AND TRAINING DATA#################
@@ -53,7 +174,19 @@ depotPredict=[df.iloc[0]["depot"] for df in dfTestOriginal]
 tankPredict=[df.iloc[0]["tank"] for df in dfTestOriginal]
 #create a shipPredict list containing the values of the ship column in each dataframe in dfTestOriginal
 shipPredict=[df.iloc[0]["ship"] for df in dfTestOriginal]
-
+#concatenate the dataframes in the list into a single dataframe
+df=pd.concat(dfTrain)
+#drop the columns "vname" as it is not needed for the model
+df=df.drop(columns=["vname"])
+#reset the index of the dataframe
+dtf=df.reset_index(drop=True)
+#drop the index column
+dtf=dtf.drop(columns=["index"])
+#convert all columns to int64
+#dtf=dtf.astype('int64')
+scaleFactor=500
+#divide the values column by 100
+dtf['values']=dtf['values']/scaleFactor
 
 #####################################################3
 
