@@ -159,9 +159,9 @@ def generateAreaStatsLineGraph(directory,syncTime):
     fig = go.Figure()
     for frame in entropyFrames:
         fig.add_trace(go.Scatter(x=frame['time'], y=frame['avgArea'], mode='lines', name="Average Area"))
-        fig.add_trace(go.Scatter(x=frame['time'], y=frame['maxArea'], mode='lines', name="Maximum Area"))
-        fig.add_trace(go.Scatter(x=frame['time'], y=frame['minArea'], mode='lines', name="Minimum Area"))
-        fig.add_trace(go.Scatter(x=frame['time'], y=frame['stdDevArea'], mode='lines', name="StDev Area"))
+        #fig.add_trace(go.Scatter(x=frame['time'], y=frame['maxArea'], mode='lines', name="Maximum Area"))
+        #fig.add_trace(go.Scatter(x=frame['time'], y=frame['minArea'], mode='lines', name="Minimum Area"))
+       # fig.add_trace(go.Scatter(x=frame['time'], y=frame['stdDevArea'], mode='lines', name="StDev Area"))
     return fig
 def generateLatencyAverageLineGraph(directory,syncTime):
     latencyFrames = []
@@ -365,16 +365,37 @@ def generateAverageAreaDataFrame(directory,shipNum):
 
 def generateDepotLatencySummaryFigure(idleSummaryDF):
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[360], mode='lines', name="360"))
-    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[720], mode='lines', name="720"))
-    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[1080], mode='lines', name="1080"))
+    #add an x axis label
+    fig.update_layout(xaxis_title="Number of Depots")
+    #add a y axis label
+    fig.update_layout(yaxis_title="Average Idle Time (s)")
+    #add a title
+    fig.update_layout(title="Average Idle Time vs. Number of Depots")
+    #start y axis at zero
+    #fig.update_yaxes(range=[0, max(idleSummaryDF[360].max(),idleSummaryDF[720].max(),idleSummaryDF[1080].max())])
+    #make x axis increments of 1
+    fig.update_xaxes(dtick=1)
+    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[360], mode='lines', name="360 Unit Tank"))
+    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[720], mode='lines', name="720 Unit Tank"))
+    fig.add_trace(go.Scatter(x=idleSummaryDF['Number of Depots'], y=idleSummaryDF[1080], mode='lines', name="1080 Unit Tank"))
+
     return fig
 
 def generateAverageAreaSummaryFigure(areaSummaryDF):
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[360], mode='lines', name="360"))
-    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[720], mode='lines', name="720"))
-    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[1080], mode='lines', name="1080"))
+    #add an x axis label
+    fig.update_layout(xaxis_title="Number of Depots")
+    #add a y axis label
+    fig.update_layout(yaxis_title="Average Voronoi Polygon Area (m^2)")
+    #add a title
+    fig.update_layout(title="Average Voronoi Polygon Area vs. Number of Depots")
+    #start y axis at zero
+    #fig.update_yaxes(range=[0, max(areaSummaryDF[360].max(),areaSummaryDF[720].max(),areaSummaryDF[1080].max())])
+    #make x axis increments of 1
+    fig.update_xaxes(dtick=1)
+    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[360], mode='lines', name="360 Unit Tank"))
+    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[720], mode='lines', name="720 Unit Tank"))
+    fig.add_trace(go.Scatter(x=areaSummaryDF['Number of Depots'], y=areaSummaryDF[1080], mode='lines', name="1080 Unit Tank"))
     return fig
 def generateAverageAreaSummaryFigureMap(directory, shipNumbers):
     #iterate through the ship numbers and generate a dataframe for each ship number make a figure for each ship number from the dataframe and add it to a figure map
@@ -382,6 +403,7 @@ def generateAverageAreaSummaryFigureMap(directory, shipNumbers):
     for shipNum in shipNumbers:
         areaSummaryDF = generateAverageAreaDataFrame(directory,shipNum)
         fig = generateAverageAreaSummaryFigure(areaSummaryDF)
+
         figMap[shipNum] = fig
     return figMap
 def generateDepotLatencySummaryFigureMap(directory, shipNumbers):
@@ -390,6 +412,8 @@ def generateDepotLatencySummaryFigureMap(directory, shipNumbers):
     for shipNum in shipNumbers:
         idleSummaryDF = generateAverageIdleTimeDataFrame(directory,shipNum)
         fig = generateDepotLatencySummaryFigure(idleSummaryDF)
+        #write the figure to a png file in the images folder in the current directory. The file name contains the ship number
+        fig.write_image("images/idleSummary"+str(shipNum)+".png")
         figMap[shipNum] = fig
     # generateAverageIdleTimeDataFrame
 def generateSummaryDataFrame(directory,shipNumber):
@@ -423,6 +447,9 @@ def generateSummaryDataFrame(directory,shipNumber):
             # runDirectory=os.path.join(directory, "depots_"+str(depotNum)+"-tank_"+str(tankSize))
             # syncTime=findTimeVehiclesStabilized(runDirectory)
             df[tankSize][depotNum]= str(areaDF[tankSize][depotNum]) + " / " + str(idleDF[tankSize][depotNum])
+    #write the summary dataframe to a latex table in the latex folder without the index
+    #df.to_latex("summaryTable.tex", index=False)
+    df.to_latex(os.path.join(os.getcwd(),"latex", "summaryTable_"+str(shipNumber)+".tex"), index=False)
     return df
 def getShipQuantityInformationDF(directory):
     #iterate through the folders in the directory, for each folder, split the folder name by "_" and assign ships to the third element
@@ -499,6 +526,14 @@ def generateFuelLineFigureMap(directory, shipNumbers):
                 syncTime=findTimeVehiclesStabilized(fileDirectory)
                 #generate the fuel line figure from the file directory and vehicle stabilization time
                 fig=generateFuelLineGraph(fileDirectory, syncTime)
+                #add an x label to the figure
+                fig.update_xaxes(title_text="Time (h)")
+                #add a y label to the figure
+                fig.update_yaxes(title_text="Fuel Remaining (Units)")
+                #add a title to the figure
+                fig.update_layout(title_text="Fuel Time History for "+str(shipQty)+" Ships with a "+str(tankSize)+" Tank Size Fueling From "+str(depotNum)+" Depots")
+                #write the figure to a file in the timeSeries directory. The file name is the ship qty, tank size, and depot number
+                fig.write_image(os.path.join(os.getcwd(), "timeSeries", "fuelingCount_"+str(shipQty)+"_"+str(tankSize)+"_"+str(depotNum)+".png"))
                 #add the figure to the list
                 tankList.append(fig)
             #add the tank list to the figures list
@@ -593,6 +628,12 @@ def generateLatencyAverageMap(directory, shipNumbers):
                 syncTime=findTimeVehiclesStabilized(fileDirectory)
                 #generate the fuel line figure from the file directory and vehicle stabilization time
                 fig=generateLatencyAverageLineGraph(fileDirectory, syncTime)
+                #add an x label to the figure
+                fig.update_xaxes(title_text="Time (h)")
+                #add a y label to the figure
+                fig.update_yaxes(title_text="Grid Idle Time (s)")
+                #add a title to the figure
+                fig.update_layout(title_text="Grid Idle Time vs. Time for run with "+str(shipQty)+" ships, "+str(depotNum)+" depots, and "+str(tankSize)+" tank size")
                 #add the figure to the list
                 tankList.append(fig)
             #add the tank list to the figures list
@@ -640,6 +681,12 @@ def generateAreaStatsLineGraphMap(directory, shipNumbers):
                 syncTime=findTimeVehiclesStabilized(fileDirectory)
                 #generate the fuel line figure from the file directory and vehicle stabilization time
                 fig=generateAreaStatsLineGraph(fileDirectory, syncTime)
+                #add an x label to the figure
+                fig.update_xaxes(title_text="Time (h)")
+                #add a y label to the figure
+                fig.update_yaxes(title_text="Area (m^2)")
+                #add a title to the figure
+                fig.update_layout(title_text="Average Voronoi Polygon Area vs. Time for run with "+str(shipQty)+" ships, "+str(depotNum)+" depots, and "+str(tankSize)+" tank size")
                 #add the figure to the list
                 tankList.append(fig)
             #add the tank list to the figures list
@@ -687,6 +734,12 @@ def generateFuelingCountLineGraphMap(directory, shipNumbers):
                 syncTime=findTimeVehiclesStabilized(fileDirectory)
                 #generate the fuel line figure from the file directory and vehicle stabilization time
                 fig=generateVehicleFuelingCountLineGraph(fileDirectory, syncTime)
+                #add an x label to the figure
+                fig.update_xaxes(title_text="Time (h)")
+                #add a y label to the figure
+                fig.update_yaxes(title_text="Number of Vehicles Fueling")
+                #add a title to the figure
+                fig.update_layout(title_text="Number of Vehicles Fueling vs. Time for run with "+str(shipQty)+" ships, "+str(depotNum)+" depots, and "+str(tankSize)+" tank size")
                 #add the figure to the list
                 tankList.append(fig)
             #add the tank list to the figures list
@@ -707,8 +760,14 @@ def generateSummaryIdleTimeFigureMap(directory, shipNumbers):
     for shipQty in shipNumbers:
     #generate average idle time data frame
         df=generateAverageIdleTimeDataFrame(directory, shipQty)
+
         fig = generateAverageAreaSummaryFigure(df)
+        #write the dataframe to a latex table and save it in the latex directory
+        #df.to_latex(os.path.join(os.getcwd(), "latex", "idle_time_summary_table_"+str(shipQty)+".tex"))
         shipQtyMap[shipQty]=fig
+        fig.update_layout(title="Average Idle Time vs. Number of Depots For a Fleet of " + str(shipQty) + " Ships")
+        # write the figure to a png file in the images folder in the current directory. The file name contains the ship number
+        fig.write_image("images/idleSummary" + str(shipQty) + ".png")
     return shipQtyMap
 def generateSummaryAreaFigureMap(directory, shipNumbers):
     #iterate through the ship quantities, calculate the summary area figure for each ship quantity, and add the figure to the map
@@ -718,6 +777,9 @@ def generateSummaryAreaFigureMap(directory, shipNumbers):
         df=generateAverageAreaDataFrame(directory, shipQty)
         fig = generateAverageAreaSummaryFigure(df)
         shipQtyMap[shipQty]=fig
+        fig.update_layout(title="Average Voronoi Area vs. Number of Depots For a Fleet of " + str(shipQty) + " Ships")
+        # write the figure to a png file in the images folder in the current directory. The file name contains the ship number
+        fig.write_image("images/areaSummary" + str(shipQty) + ".png")
     return shipQtyMap
 
 
@@ -940,8 +1002,10 @@ def generateDashboard(depotDirectory, vehicleDirectory):
     # fig9=generateAverageAreaSummaryFigure(generateAverageAreaDataFrame(vehicleDirectory,shipQty))
     app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
     colors = {
-      'background': '#111111',
-       'text': '#7FDBFF'
+     # 'background': '#111111',
+        'background': '#FFFFFF',
+       #'text': '#7FDBFF'
+        'text': '#111111'
     }
 
         # f = os.path.join(vehicleDirectory, filename)
@@ -1061,9 +1125,6 @@ def generateDashboard(depotDirectory, vehicleDirectory):
             figure=fig7
 
 
-        ), dcc.Graph(
-            id='idle-time-histogram',
-            figure=fig4
         ),
         dcc.Graph(
             id='latency-average-timeline',
@@ -1073,6 +1134,9 @@ def generateDashboard(depotDirectory, vehicleDirectory):
                                           "margin-left": "auto",
                                           "margin-right": "auto", },
             figure=fig10
+        ),dcc.Graph(
+            id='idle-time-histogram',
+            figure=fig4
         ), dcc.Graph(
             id='area-average-graph',
             figure=fig9
